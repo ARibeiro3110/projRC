@@ -10,20 +10,18 @@
 
 #include "user.h"
 
-#define DEFAULT_IP ""          // TODO
+#define DEFAULT_IP "localhost"
 #define DEFAULT_PORT "58046"   // 58000 + 46 (group number)
 
-int order_of_magnitude(int number) {
-    int oom = 0;
-
-    while (number > 0) {
-        oom++;
-        number = number / 10;
-    }
-    return oom;
+int is_numeric(char *word) {
+    int l = strlen(word);
+    for (int i = 0; i < l; i++)
+        if ('0' > word[i] || word[i] > '9')
+            return 0;
+    return 1;
 }
 
-int is_alphanumeric(char* word) {
+int is_alphanumeric(char *word) {
     int l = strlen(word);
     for (int i = 0; i < l; i++)
         if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z' || 'a' <= word[i] <= 'z'))
@@ -74,17 +72,17 @@ void handle_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     }
 }
 
-void login(int uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) {
-    if (order_of_magnitude(uid) != 6 || strlen(password) != 8 || !is_alphanumeric(password)) {
+int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) { 
+    if (strlen(uid) != 6 || strlen(password) != 8 || !is_alphanumeric(password) || !is_numeric(uid)) {
         fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
-        return;
+        return 0;
     }
 
     // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
     char message[21], buffer[128], status[4];        // TODO
-    sprintf(message, "LIN %d %s\n", uid, password);
+    sprintf(message, "LIN %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
@@ -101,20 +99,28 @@ void login(int uid, char *password, int fd, struct addrinfo *res, struct sockadd
 
     sscanf(buffer, "RLI %s\n", status);
 
-    if (!strcmp(status, "OK"))
+    if (!strcmp(status, "OK")) {
         printf("User logged in.\n");
+        return 1;
+    }
     
-    else if (!strcmp(status, "NOK"))
+    else if (!strcmp(status, "NOK")) {
         printf("Password is incorrect. Log in failed. Please try again.\n");
+        return 0;
+    }
     
-    else if (!strcmp(status, "REG"))
+    else if (!strcmp(status, "REG")) {
         printf("New user sucessfully created and logged in.\n");
+        return 1;
+    }
     
-    else 
+    else {
         fprintf(stderr, "ERROR: unexpected protocol message\n");
+        return 0;
+    }
 }
 
-void logout(int uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     // verifications are not necessary since the values for uid and password 
     // were previously verified
     
@@ -122,7 +128,7 @@ void logout(int uid, char *password, int fd, struct addrinfo *res, struct sockad
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
     char message[21], buffer[128], status[4];        // TODO
-    sprintf(message, "LOU %d %s\n", uid, password);
+    sprintf(message, "LOU %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
@@ -152,8 +158,42 @@ void logout(int uid, char *password, int fd, struct addrinfo *res, struct sockad
         fprintf(stderr, "ERROR: unexpected protocol message\n");
 }
 
-void unregister(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+    // verifications are not necessary since the values for uid and password 
+    // were previously verified
+    
+    // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
+    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
+    // (3 letters and one \0).
+    char message[21], buffer[128], status[4];        // TODO
+    sprintf(message, "UNR %s %s\n", uid, password);
 
+    ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: logout request failed\n");
+        exit(1);
+    }
+
+    socklen_t addrlen = sizeof(addr);
+    n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: logout response failed\n");
+        exit(1);
+    }
+
+    sscanf(buffer, "RUR %s\n", status);
+
+    if (!strcmp(status, "OK"))
+        printf("User logged out.\n");
+    
+    else if (!strcmp(status, "NOK"))
+        printf("User was not logged in. Logout failed.\n");
+    
+    else if (!strcmp(status, "UNR"))
+        printf("User is not registered.\n");
+
+    else 
+        fprintf(stderr, "ERROR: unexpected protocol message\n");
 }
 
 void open_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -220,8 +260,8 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    int uid, logged_in = 0;
-    char password[9];
+    int logged_in = 0;
+    char uid[7], password[9];
 
     printf("Input your command:\n");
 
@@ -237,9 +277,9 @@ int main(int argc, char **argv) {
                 printf("A user is already logged in. Please logout before logging in into another account.\n");
 
             else {
-                sscanf(args, " %d %s\n", &uid, password);  // save uid and password
-                login(uid, password, fd, res, addr);
-                logged_in = 1;                             // mark flag as logged in
+                sscanf(args, " %s %s\n", uid, password);   // save uid and password
+                if (login(uid, password, fd, res, addr))
+                    logged_in = 1;                         // mark flag as logged in if login sucessful
             }
         }
 
@@ -249,7 +289,7 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(command, "unregister"))
-            unregister(args, fd, res, addr);
+            unregister(uid, password, fd, res, addr);
 
         else if (!strcmp(command,  "open"))
             open_auction(args, fd, res, addr);

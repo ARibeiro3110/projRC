@@ -1,8 +1,8 @@
 #ifndef __USER_H__
 #define __USER_H__
 
-/* Calculates the order of magnitude of a number (number of digits) */
-int order_of_magnitude(int number);
+/* Returns 1 if the string is only composed of digits and 0 otherwise */
+int is_numeric(char *word);
 
 /* Returns 1 if the string is only composed of alphanumeric characters and 0 otherwise */
 int is_alphanumeric(char* word);
@@ -11,12 +11,12 @@ int is_alphanumeric(char* word);
 void handle_arguments(int argc, char **argv, char *ASIP, char *ASport);
 
 /* Registers the user into the system or logs him in */
-void login(int uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr);
+int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 /* Logs the user of the current session out */
-void logout(int uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void unregister(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 void open_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
