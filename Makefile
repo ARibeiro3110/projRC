@@ -1,7 +1,10 @@
 CC = gcc
+TARGETS = user udpserver
 
-all:
-	$(CC) user.c -o user
+all: $(TARGETS)
+
+$(TARGETS): %: %.c
+	$(CC) $^ -o $@
 
 clean:
-	rm $(TARGET)
+	rm -f $(TARGETS)

@@ -13,6 +13,9 @@
 #define DEFAULT_IP "localhost"
 #define DEFAULT_PORT "58046"   // 58000 + 46 (group number)
 
+#define MAX_BUFFER_MA_MB 6008
+#define MAX_AUCTION_LIST 6002
+
 int is_numeric(char *word) {
     int l = strlen(word);
     for (int i = 0; i < l; i++)
@@ -124,7 +127,7 @@ void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sock
     // verifications are not necessary since the values for uid and password 
     // were previously verified
     
-    // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
+    // LOU message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
     char message[21], buffer[128], status[4];        // TODO
@@ -162,32 +165,32 @@ void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct 
     // verifications are not necessary since the values for uid and password 
     // were previously verified
     
-    // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
+    // UNR message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
-    // (3 letters and one \0).
+    // (3 letters and one \0). 
     char message[21], buffer[128], status[4];        // TODO
     sprintf(message, "UNR %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
-        fprintf(stderr, "ERROR: logout request failed\n");
+        fprintf(stderr, "ERROR: unregister request failed\n");
         exit(1);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
-        fprintf(stderr, "ERROR: logout response failed\n");
+        fprintf(stderr, "ERROR: unregister response failed\n");
         exit(1);
     }
 
     sscanf(buffer, "RUR %s\n", status);
 
     if (!strcmp(status, "OK"))
-        printf("User logged out.\n");
+        printf("User unregistered.\n");
     
     else if (!strcmp(status, "NOK"))
-        printf("User was not logged in. Logout failed.\n");
+        printf("User was not logged in. Unregistered failed.\n");
     
     else if (!strcmp(status, "UNR"))
         printf("User is not registered.\n");
@@ -204,12 +207,96 @@ void close_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in 
 
 }
 
-void myauctions(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+    // verifications are not necessary since the value for uid and was 
+    // previously verified
+    
+    // LMA message always has 12 chars (3 for LMA, 6 for UID, 1 for spaces, 1 
+    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and 
+    // one \0). Auction_list has at most 6002 chars (6 chars per auction * 1000 
+    // maximum auctions + 1 for \n + 1 for for \0). Buffer has variable size, 
+    // but at most 6008 chars (3 for LMA + 1 for space + 2 for status + 6 chars 
+    // per auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
+    char message[12], buffer[MAX_BUFFER_MA_MB], status[4], auction_list[MAX_AUCTION_LIST];
+    sprintf(message, "LMA %s\n", uid);
+
+    ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: myauctions request failed\n");
+        exit(1);
+    }
+
+    socklen_t addrlen = sizeof(addr);
+    n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB, 0, (struct sockaddr*) &addr, &addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: myauctions response failed\n");
+        exit(1);
+    }
+
+    sscanf(buffer, "RMA %s %s\n", status, auction_list);
+
+    if (!strcmp(status, "OK"))
+        printf("User unregistered.\n");
+    
+    else if (!strcmp(status, "NOK"))
+        printf("User was not logged in. Unregistered failed.\n");
+    
+    else if (!strcmp(status, "UNR"))
+        printf("User is not registered.\n");
+
+    else 
+        fprintf(stderr, "ERROR: unexpected protocol message\n");
 }
 
-void mybids(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+    // verifications are not necessary since the values for uid and password 
+    // were previously verified
+    
+    // LMB message always has 12 chars (3 for LMB, 6 for UID, 1 for spaces, 1
+    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
+    // one \0).
+    
+    char message[12], buffer[MAX_BUFFER_MA_MB], status[4], auction_list[MAX_AUCTION_LIST];
+    sprintf(message, "LMB %s\n", uid);
 
+    ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: mybids request failed\n");
+        exit(1);
+    }
+
+    socklen_t addrlen = sizeof(addr);
+    n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: mybids response failed\n");
+        exit(1);
+    }
+
+    sscanf(buffer, "RMB %s %s\n", status, auction_list);
+
+    if (!strcmp(status, "NOK"))
+        printf("User has no ongoing bids.\n");
+    
+    else if (!strcmp(status, "NLG"))
+        printf("User is not logged in.\n");
+    
+    else if (!strcmp(status, "OK")) {
+        printf("List of user's bids: ");
+        while (1) {
+            char AID[4], *state_word;
+            int state;
+            sscanf(auction_list, "%s %d", AID, &state);
+            state_word = state ? "active" : "closed";
+            printf("\"%s\" - %s; ", AID, state_word);
+            
+            if (getchar() != ' ')
+                break;
+        }
+    }
+
+    else 
+        fprintf(stderr, "ERROR: unexpected protocol message\n");
 }
 
 void list(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -229,7 +316,6 @@ void show_record(char *args, int fd, struct addrinfo *res, struct sockaddr_in ad
 }
 
 void exit_user(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
-    // TODO
     freeaddrinfo(res);
     close(fd); 
     exit(0);
@@ -263,7 +349,7 @@ int main(int argc, char **argv) {
     int logged_in = 0;
     char uid[7], password[9];
 
-    printf("Input your command:\n");
+    printf("Input your command:\n"); // TODO
 
     while (1) {
         printf("> ");
@@ -274,7 +360,7 @@ int main(int argc, char **argv) {
             fgets(args, 100, stdin);    // TODO
 
             if (logged_in)
-                printf("A user is already logged in. Please logout before logging in into another account.\n");
+                printf("WARNING: A user is already logged in. Please logout before logging in into another account.\n");
 
             else {
                 sscanf(args, " %s %s\n", uid, password);   // save uid and password
@@ -284,12 +370,24 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(command, "logout")) {
-            logout(uid, password, fd, res, addr);
-            logged_in = 0;
+            if (logged_in) {
+                logout(uid, password, fd, res, addr);
+                logged_in = 0;
+            }
+            
+            else
+                printf("WARNING: No user is logged in. Please log in before logging out.\n");
         }
 
-        else if (!strcmp(command, "unregister"))
-            unregister(uid, password, fd, res, addr);
+        else if (!strcmp(command, "unregister")) {
+            if (logged_in) {
+                unregister(uid, password, fd, res, addr);
+                logged_in = 0;
+            }
+
+            else
+                printf("WARNING: No user is logged in. Please log in before unregistering.\n");
+        }
 
         else if (!strcmp(command,  "open"))
             open_auction(args, fd, res, addr);
@@ -315,8 +413,12 @@ int main(int argc, char **argv) {
         else if (!strcmp(command,  "show_record") || !strcmp(command,  "sr"))
             show_record(args, fd, res, addr);
 
-        else if (!strcmp(command,  "exit"))
-            exit_user(args, fd, res, addr);
+        else if (!strcmp(command,  "exit")) {
+            if (logged_in)
+                printf("WARNING: Please log out before exiting.\n");
+            else
+                exit_user(args, fd, res, addr);
+        }
 
         else 
             printf("Command not found. Please try again\n");

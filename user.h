@@ -22,9 +22,9 @@ void open_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in a
 
 void close_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void myauctions(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void mybids(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 void list(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
