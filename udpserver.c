@@ -5,6 +5,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <stdio.h>
+#include <string.h>
 #define PORT "58046"
 
 int fd, errcode;
@@ -41,7 +43,7 @@ int main() {
 		memset(buffer, 0, 128);
 		read(0, buffer, 128);
 		
-		n = sendto(fd, buffer, n, 0, (struct sockaddr*) &addr, addrlen);
+		n = sendto(fd, buffer, strlen(buffer) * sizeof(char), 0, (struct sockaddr*) &addr, addrlen);
 		if (n == -1) /*error*/ exit(1);
 
 		if (!strcmp(buffer, "quit")) break;
