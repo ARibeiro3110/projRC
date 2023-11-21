@@ -234,16 +234,30 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
         exit(1);
     }
 
-    sscanf(buffer, "RMA %s %s\n", status, auction_list);
+    // reads everything into auction_list until \n character
+    sscanf(buffer, "RMA %s %[^\n]", status, auction_list);
 
-    if (!strcmp(status, "OK"))
-        printf("User unregistered.\n");
+    if (!strcmp(status, "OK")) {
+        printf("List of user's auctions: ");
     
+        char AID[4], state[2];
+
+        // Each AID state pair has 6 chars (3 for AID, one for state and one for
+        // space). While the string is not finished, we traverse the string 6 by 
+        // 6, extract the AID and the state from that section and print the section.
+        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
+            if (!strcmp(state, "1"))
+                printf("\"%s\" - active; ", AID);
+            else
+                printf("\"%s\" - closed; ", AID);
+        }
+    }
+
     else if (!strcmp(status, "NOK"))
-        printf("User was not logged in. Unregistered failed.\n");
+        printf("User has no ungoing auctions. Auctions listing failed.\n");
     
-    else if (!strcmp(status, "UNR"))
-        printf("User is not registered.\n");
+    else if (!strcmp(status, "NLG"))
+        printf("User is not logged in.\n");
 
     else 
         fprintf(stderr, "ERROR: unexpected protocol message\n");
@@ -273,27 +287,30 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
         exit(1);
     }
 
-    sscanf(buffer, "RMB %s %s\n", status, auction_list);
+    // reads everything into auction_list until \n character
+    sscanf(buffer, "RMB %s %[^\n]", status, auction_list);
 
-    if (!strcmp(status, "NOK"))
-        printf("User has no ongoing bids.\n");
+    if (!strcmp(status, "OK")) {
+        printf("List of user's bids: ");
+    
+        char AID[4], state[2];
+
+        // Each AID state pair has 6 chars (3 for AID, one for state and one for
+        // space). While the string is not finished, we traverse the string 6 by 
+        // 6, extract the AID and the state from that section and print the section.
+        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
+            if (!strcmp(state, "1"))
+                printf("\"%s\" - active; ", AID);
+            else
+                printf("\"%s\" - closed; ", AID);
+        }
+    }
+
+    else if (!strcmp(status, "NOK"))
+        printf("User has no ongoing bids. Bid listing failed.\n");
     
     else if (!strcmp(status, "NLG"))
         printf("User is not logged in.\n");
-    
-    else if (!strcmp(status, "OK")) {
-        printf("List of user's bids: ");
-        while (1) {
-            char AID[4], *state_word;
-            int state;
-            sscanf(auction_list, "%s %d", AID, &state);
-            state_word = state ? "active" : "closed";
-            printf("\"%s\" - %s; ", AID, state_word);
-            
-            if (getchar() != ' ')
-                break;
-        }
-    }
 
     else 
         fprintf(stderr, "ERROR: unexpected protocol message\n");
@@ -389,17 +406,27 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before unregistering.\n");
         }
 
-        else if (!strcmp(command,  "open"))
+        else if (!strcmp(command,  "open")) {
             open_auction(args, fd, res, addr);
+        }
 
         else if (!strcmp(command, "close"))
             close_auction(args, fd, res, addr);
 
-        else if (!strcmp(command, "myauctions") || !strcmp(command, "ma"))
-            myauctions(args, fd, res, addr);
+        else if (!strcmp(command, "myauctions") || !strcmp(command, "ma")) {
+            if (logged_in)
+                myauctions(uid, fd, res, addr);
+
+            else
+                printf("WARNING: No user is logged in. Please log in before requesting auction listing.\n");            
+        }
 
         else if (!strcmp(command, "mybids") || !strcmp(command, "mb"))
-            mybids(args, fd, res, addr);
+            if (logged_in)
+                mybids(uid, fd, res, addr);
+
+            else
+                printf("WARNING: No user is logged in. Please log in before requesting bid listing.\n"); 
 
         else if (!strcmp(command, "list") || !strcmp(command, "l"))
             list(args, fd, res, addr);
