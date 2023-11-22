@@ -243,7 +243,7 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     
         char AID[4], state[2];
 
-        // Each AID state pair has 6 chars (3 for AID, 1 for state 1 one for
+        // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
         for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
