@@ -34,6 +34,6 @@ void bid(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 void show_record(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void exit_user(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void exit_user(int exit_status, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 #endif

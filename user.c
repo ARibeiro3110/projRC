@@ -32,6 +32,77 @@ int is_alphanumeric(char *word) {
     return 1;
 }
 
+int is_filename(char *word) {
+    int l = strlen(word);
+    for (int i = 0; i < l; i++) {
+        if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z' 
+              || 'a' <= word[i] <= 'z' || word[i] == '-' 
+              || word[i] == '_' || word[i] == '.'))
+            return 0;
+        
+        if (i == l - 4 && word[i] != '.')
+            return 0;
+        
+        if (i > l - 4 && ('a' > word[i] || word[i] > 'z'))
+            return 0;
+    }
+    return 1;
+}
+
+int is_date(char *word) {
+    int l = strlen(word);
+    for (int i = 0; i < l; i++) {   // YYYY-MM-DD
+        if ((i == 4 || i == 7) && word[i] != '-')
+            return 0;
+        else if (i != 4 && i != 7 && ('0' < word[i] || word[i] < '9'))
+            return 0;
+    }
+
+    int year, month, day;
+    sscanf(word, "%d-%d-%d", &year, &month, &day);
+
+    if (year <= 2023) 
+        if (1 <= month <=12) {
+            if ((1 <= day <= 31) && (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12))
+                return 1;
+            else if ((1 <= day <= 30) && (month == 4 || month == 6 || month == 9 || month == 11))
+                return 1;
+            else if((1 <= day<=28) && month == 2)
+                return 1;
+            else if(day == 29 && month == 2 && (year % 400 == 0 ||(year % 4 == 0 && year % 100 != 0)))
+                return 1;
+            else
+                return 0;
+        }
+        else
+            return 0;
+    else
+        return 0;
+    return 1;
+}
+
+int is_time(char *word) {
+    int l = strlen(word);
+    for (int i = 0; i < l; i++) {   // YYYY-MM-DD
+        if ((i == 2 || i == 5) && word[i] != ':')
+            return 0;
+        else if (i != 2 && i != 5 && ('0' < word[i] || word[i] < '9'))
+            return 0;
+    }
+
+    int hours, minutes, seconds;
+    sscanf(word, "%d:%d:%d", &hours, &minutes, &seconds);
+
+    if (0 > hours || hours > 24)
+        return 0;
+    if (0 > minutes || minutes > 60)
+        return 0;
+    if (0 > seconds || seconds > 60)
+        return 0;
+
+    return 1;
+}
+
 void handle_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     switch (argc) {
     case 1:          // all arguments are omitted
@@ -84,20 +155,20 @@ int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockad
     // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
-    char message[21], buffer[128], status[4];        // TODO
-    sprintf(message, "LIN %s %s\n", uid, password);
+    char message[22], buffer[128], status[4];        // TODO
+    sprintf(message, "LIN %s %s \n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: login request failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: login response failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     sscanf(buffer, "RLI %s\n", status);
@@ -116,9 +187,19 @@ int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockad
         printf("New user sucessfully created and logged in.\n");
         return 1;
     }
+
+    else if (!strcmp(status, "ERR")) {
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+        return 0;
+    }
     
+    else if (!strcmp(buffer, "ERR\n")) {
+        printf("Unexpected protocol message.\n");
+        return 0;
+    }
+
     else {
-        fprintf(stderr, "ERROR: unexpected protocol message\n");
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
         return 0;
     }
 }
@@ -136,14 +217,14 @@ void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sock
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: logout request failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: logout response failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     sscanf(buffer, "RLO %s\n", status);
@@ -157,8 +238,14 @@ void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sock
     else if (!strcmp(status, "UNR"))
         printf("User is not registered.\n");
 
+    else if (!strcmp(status, "ERR"))
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
     else 
-        fprintf(stderr, "ERROR: unexpected protocol message\n");
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
 void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -174,14 +261,14 @@ void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: unregister request failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: unregister response failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     sscanf(buffer, "RUR %s\n", status);
@@ -195,8 +282,14 @@ void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct 
     else if (!strcmp(status, "UNR"))
         printf("User is not registered.\n");
 
+    else if (!strcmp(status, "ERR"))
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
     else 
-        fprintf(stderr, "ERROR: unexpected protocol message\n");
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
 void open_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -224,14 +317,14 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: myauctions request failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: myauctions response failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     // reads everything into auction_list until \n character
@@ -241,16 +334,25 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     if (!strcmp(status, "OK")) {
         printf("List of user's auctions: ");
     
-        char AID[4], state[2];
+        char aid[4], state[2];
 
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
-        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
+        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", aid, state) != EOF; i++) {
+            if (strlen(aid) != 3) {
+                fprintf(stderr, "ERROR: AID %s is not valid.\n", aid);
+                return;
+            }
+
             if (!strcmp(state, "1"))
-                printf("\"%s\" - active; ", AID);
-            else
-                printf("\"%s\" - closed; ", AID);
+                printf("\"%s\" - active; ", aid);
+            else if (!strcmp(state, "0"))
+                printf("\"%s\" - closed; ", aid);
+            else {
+                fprintf(stderr, "ERROR: state %s is not valid.\n", state);
+                return;
+            }
         }
         printf("\n");
     }
@@ -261,13 +363,19 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     else if (!strcmp(status, "NLG"))
         printf("User is not logged in.\n");
 
+    else if (!strcmp(status, "ERR"))
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
     else 
-        fprintf(stderr, "ERROR: unexpected protocol message\n");
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
 void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
-    // verifications are not necessary since the values for uid and password 
-    // were previously verified
+    // verifications are not necessary since the value for uid and was 
+    // previously verified
     
     // LMB message always has 12 chars (3 for LMB, 6 for UID, 1 for spaces, 1
     // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
@@ -282,14 +390,14 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: mybids request failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: mybids response failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     // reads everything into auction_list until \n character
@@ -299,16 +407,25 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     if (!strcmp(status, "OK")) {
         printf("List of user's bids: ");
     
-        char AID[4], state[2];
+        char aid[4], state[2];
 
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
-        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
+        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", aid, state) != EOF; i++) {
+            if (strlen(aid) != 3) {
+                fprintf(stderr, "ERROR: AID %s is not valid.\n", aid);
+                return;
+            }
+
             if (!strcmp(state, "1"))
-                printf("\"%s\" - active; ", AID);
-            else
-                printf("\"%s\" - closed; ", AID);
+                printf("\"%s\" - active; ", aid);
+            else if (!strcmp(state, "0"))
+                printf("\"%s\" - closed; ", aid);
+            else {
+                fprintf(stderr, "ERROR: state %s is not valid.\n", state);
+                return;
+            }
         }
         printf("\n");
     }
@@ -319,14 +436,17 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     else if (!strcmp(status, "NLG"))
         printf("User is not logged in.\n");
 
+    else if (!strcmp(status, "ERR"))
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
     else 
-        fprintf(stderr, "ERROR: unexpected protocol message\n");
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
 void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
-    // verifications are not necessary since the values for uid and password
-    // were previously verified
-    
     // LST message always has 5 chars. Status message has at most 4 chars (3
     // letters and one \0). Auction_list has at most 6002 chars (6 chars per
     // auction * 1000 maximum auctions + 1 for \n + 1 for for \0). Buffer has
@@ -339,42 +459,62 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: list request failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: list response failed\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     // reads everything into auction_list until \n character
     memset(auction_list, 0, MAX_AUCTION_LIST);
     sscanf(buffer, "RLS %s %[^\n]", status, auction_list);
-    printf("\nPRINT1\n%s\n", buffer);
 
     if (!strcmp(status, "OK")) {
+        if (!strlen(auction_list)) {
+            printf("No auctions are currently active.\n");
+            return;
+        }
+
         printf("List of the currently active auctions: ");
     
-        char AID[4], state[2];
+        char aid[4], state[2];
 
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
-        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++)
+        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", aid, state) != EOF; i++) {
+            if (strlen(aid) != 3) {
+                fprintf(stderr, "ERROR: AID %s is not valid.\n", aid);
+                return;
+            }
+
             if (!strcmp(state, "1"))
-                printf("\"%s\" - active; ", AID);
-        // TODO no enunciado diz que são enviadas todas as auctions (assumo que
-        // caiba ao user só dar print das que quer), mas no powerpoint *parece-me* que só envia as ativas
+                printf("\"%s\" - active; ", aid);
+            else if (!strcmp(state, "0"))
+                fprintf(stderr, "ERROR: list is returning inactive auctions.\n");
+            else {
+                fprintf(stderr, "ERROR: state %s is not valid.\n", state);
+                return;
+            }
+        }
         printf("\n");
     }
 
     else if (!strcmp(status, "NOK"))
         printf("No auction was yet started.\n");
+
+    else if (!strcmp(status, "ERR")) 
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
     
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
     else 
-        fprintf(stderr, "ERROR: unexpected protocol message\n");
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
 void show_asset(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -385,14 +525,122 @@ void bid(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
 
 }
 
-void show_record(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+    if (strlen(aid) != 3 || !is_numeric(aid)) {
+        fprintf(stderr, "usage: show_record <AID: 6 digits>\n\tor sr <AID: 6 digits>\n");
+        return;
+    }
+    
+    // SRC message always has 9 chars (3 for SRC, 3 for AID, 1 for spaces, 1
+    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
+    // one \0). 
+    
+    // TODO: Auction_list has at most 6002 chars (6 chars per auction * 1000 
+    // maximum auctions + 1 for \n + 1 for for \0). Buffer has variable size, 
+    // but at most 6008 chars (3 for RMB + 1 for space + 2 for status + 6 chars 
+    // per auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
+    char message[9], buffer[10000], status[4], host_uid[7], auction_name[100], 
+         asset_fname[25], start_value[100], start_date[11], start_time[9], timeactive[7],
+         bid_info[100], closed_info[100]; // TODO
+    sprintf(message, "SRC %s\n", aid);
+
+    ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: mybids request failed\n");
+        exit_user(1, fd, res, addr);
+    }
+
+    socklen_t addrlen = sizeof(addr);
+    n = recvfrom(fd, buffer, 10000, 0, (struct sockaddr*) &addr, &addrlen);
+    if (n == -1) { /*error*/
+        fprintf(stderr, "ERROR: list response failed\n");
+        exit_user(1, fd, res, addr);
+    }
+
+    memset(bid_info, 0, sizeof(bid_info));
+
+    // Using this format, bid_info will always have a \n at the beginning. If
+    // no bids were specified and if we used another format which matched the \n 
+    // at the end of the owner info, the %[^E] part of the string would read 
+    // nothing. In turn, this would prevent the closed_info to read any 
+    // information. On the contrary, if we keep the \n unmatched, %[^E] will 
+    // always match at least with one character (\n), which allows closed_info
+    // to read the rest of the string.
+    sscanf(buffer, "RRC %s %s %s %s %s %s %s %s%[^E]%[^\n]", status, host_uid, 
+            auction_name, asset_fname, start_value, start_date, start_time, 
+            timeactive, bid_info, closed_info);
+
+    if (strlen(host_uid) != 6 || !is_numeric(host_uid) || !is_filename(asset_fname) 
+        || !is_numeric(start_value) || !is_date(start_date) || !is_time(start_time)
+        || strlen(timeactive) != 6 || !is_numeric(timeactive)) {
+        fprintf(stderr, "ERROR: server sent message in wrong format\n");
+        return;
+    }
+
+    if (!strcmp(status, "OK")) {
+        printf("owner: %s, %s, %s, value=%s, %s %s, timeactive: %s\n", host_uid, 
+               auction_name, asset_fname, start_value, start_date, start_time, 
+               timeactive);
+        
+        // taking into account the '\n'
+        if (strlen(bid_info) - 1) {
+            char bid_info_line[100], bidder_uid[7], bid_value[100], bid_date[11], bid_time[9], 
+                 bid_sec_time[7]; // TODO
+            
+            int i = 0;
+            
+            // we start reading the string after the initial '\n', hence the i+1
+            while (sscanf(&bid_info[i+1], "%[^\n]", bid_info_line) != EOF) {
+                sscanf(bid_info_line, "B %s %s %s %s %s\n", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
+
+                if (strlen(bidder_uid) != 6 || !is_numeric(bidder_uid) 
+                    || !is_numeric(bid_value) || !is_date(bid_date) 
+                    || !is_time(bid_time) || strlen(bid_sec_time) != 6 
+                    || !is_numeric(bid_sec_time)) {
+                    fprintf(stderr, "ERROR: server sent message in wrong format\n");
+                    return;
+                }
+
+                printf("\tbid: user: %s, value=%s, %s %s, %s\n", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
+                
+                // skip the length of a bid information line to read the 
+                // following line, if there is one
+                i += strlen(bid_info_line) + 1;
+            }
+        }
+        
+        if (strlen(closed_info)) {
+            char end_date[11], end_time[9], end_sec_time[7];
+            sscanf(closed_info, "E %s %s %s\n", end_date, end_time, end_sec_time);
+
+            if (!is_date(end_date) || !is_time(end_time) 
+                || strlen(end_sec_time) != 6 || !is_numeric(end_sec_time)) {
+                    fprintf(stderr, "ERROR: server sent message in wrong format\n");
+                    return;
+                }
+
+            printf("closed: %s %s, %s\n", end_date, end_time, end_sec_time);
+        }
+    }
+
+    else if (!strcmp(status, "ERR")) 
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(status, "NOK"))
+        printf("Auction with AID %s does not exist.\n", aid);
+    
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
+    else 
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
-void exit_user(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void exit_user(int exit_status, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     freeaddrinfo(res);
     close(fd); 
-    exit(0);
+    exit(exit_status);
 }
 
 int main(int argc, char **argv) {
@@ -402,11 +650,12 @@ int main(int argc, char **argv) {
     int fd, errcode;
     struct addrinfo hints, *res;
     struct sockaddr_in addr;
-    char command[100], args[100];         // TODO
+    char comonthand[100], args[100];         // TODO
 
     fd = socket(AF_INET, SOCK_DGRAM, 0); // UDP socket
     if (fd == -1) {  /*error*/ 
         fprintf(stderr, "ERROR: Socket creation was not sucessful\n");
+        close(fd);
         exit(1);
     }
 
@@ -417,24 +666,19 @@ int main(int argc, char **argv) {
     errcode = getaddrinfo(ASIP, ASport, &hints, &res);
     if (errcode != 0) {  /*error*/ 
         fprintf(stderr, "ERROR: Server not found\n");
-        exit(1);
+        exit_user(1, fd, res, addr);
     }
 
     int logged_in = 0;
     char uid[7], password[9];
 
-    printf("Input your command:\n"); // TODO
-
-    // TODO
-    // "For replies including the status field it takes the value ERR when the
-    // syntax of the request message was incorrect or when the parameter values
-    // take invalid values. If an unexpected protocol message is received, the reply is ERR."
+    printf("Input your comonthand:\n");
 
     while (1) {
         printf("> ");
-        scanf("%s", command);
+        scanf("%s", comonthand);
 
-        if (!strcmp(command, "login")) {
+        if (!strcmp(comonthand, "login")) {
             // read or flush the rest of the input if already logged in
             fgets(args, 100, stdin);    // TODO
 
@@ -448,7 +692,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        else if (!strcmp(command, "logout")) {
+        else if (!strcmp(comonthand, "logout")) {
             if (logged_in) {
                 logout(uid, password, fd, res, addr);
                 logged_in = 0;
@@ -458,7 +702,7 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before logging out.\n");
         }
 
-        else if (!strcmp(command, "unregister")) {
+        else if (!strcmp(comonthand, "unregister")) {
             if (logged_in) {
                 unregister(uid, password, fd, res, addr);
                 logged_in = 0;
@@ -468,14 +712,14 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before unregistering.\n");
         }
 
-        else if (!strcmp(command,  "open")) {
+        else if (!strcmp(comonthand,  "open")) {
             open_auction(args, fd, res, addr);
         }
 
-        else if (!strcmp(command, "close"))
+        else if (!strcmp(comonthand, "close"))
             close_auction(args, fd, res, addr);
 
-        else if (!strcmp(command, "myauctions") || !strcmp(command, "ma")) {
+        else if (!strcmp(comonthand, "myauctions") || !strcmp(comonthand, "ma")) {
             if (logged_in)
                 myauctions(uid, fd, res, addr);
 
@@ -483,34 +727,40 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before requesting auction listing.\n");            
         }
 
-        else if (!strcmp(command, "mybids") || !strcmp(command, "mb"))
+        else if (!strcmp(comonthand, "mybids") || !strcmp(comonthand, "mb"))
             if (logged_in)
                 mybids(uid, fd, res, addr);
 
             else
                 printf("WARNING: No user is logged in. Please log in before requesting bid listing.\n"); 
 
-        else if (!strcmp(command, "list") || !strcmp(command, "l"))
+        else if (!strcmp(comonthand, "list") || !strcmp(comonthand, "l"))
             list(fd, res, addr);
 
-        else if (!strcmp(command, "show_asset") || !strcmp(command, "sa"))
+        else if (!strcmp(comonthand, "show_asset") || !strcmp(comonthand, "sa"))
             show_asset(args, fd, res, addr);
 
-        else if (!strcmp(command, "bid") || !strcmp(command, "b"))
+        else if (!strcmp(comonthand, "bid") || !strcmp(comonthand, "b"))
             bid(args, fd, res, addr);
 
-        else if (!strcmp(command,  "show_record") || !strcmp(command,  "sr"))
-            show_record(args, fd, res, addr);
+        else if (!strcmp(comonthand, "show_record") || !strcmp(comonthand, "sr")) {
+            char aid[4];
+            getchar();               // consumes the space
+            fgets(aid, 4, stdin);
+            show_record(aid, fd, res, addr);
+        }
 
-        else if (!strcmp(command, "exit")) {
+        else if (!strcmp(comonthand, "exit")) {
             if (logged_in)
                 printf("WARNING: Please log out before exiting.\n");
             else
-                exit_user(args, fd, res, addr);
+                exit_user(0, fd, res, addr);
         }
 
-        else 
-            printf("Command not found. Please try again\n");
+        else {
+            fgets(args, 100, stdin);    // flush the rest of the input 
+            printf("Comonthand not found. Please try again\n");
+        }
     }
     
     return 0;
