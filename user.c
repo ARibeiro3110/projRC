@@ -13,8 +13,8 @@
 #define DEFAULT_IP "localhost"
 #define DEFAULT_PORT "58046"   // 58000 + 46 (group number)
 
-#define MAX_BUFFER_MA_MB 6008
-#define MAX_AUCTION_LIST 6002
+#define MAX_BUFFER_MA_MB_L   6008
+#define MAX_AUCTION_LIST     6002
 
 int is_numeric(char *word) {
     int l = strlen(word);
@@ -215,10 +215,10 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     // for \n and 1 for \0). Status message has at most 4 chars (3 letters and 
     // one \0). Auction_list has at most 6002 chars (6 chars per auction * 1000 
     // maximum auctions + 1 for \n + 1 for for \0). Buffer has variable size, 
-    // but at most 6008 chars (3 for LMA + 1 for space + 2 for status + 6 chars 
+    // but at most 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars 
     // per auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
-    char message[12], buffer[MAX_BUFFER_MA_MB], status[4], auction_list[MAX_AUCTION_LIST];
+    char message[12], buffer[MAX_BUFFER_MA_MB_L], status[4], auction_list[MAX_AUCTION_LIST];
     sprintf(message, "LMA %s\n", uid);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -228,13 +228,14 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     }
 
     socklen_t addrlen = sizeof(addr);
-    n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB, 0, (struct sockaddr*) &addr, &addrlen);
+    n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: myauctions response failed\n");
         exit(1);
     }
 
     // reads everything into auction_list until \n character
+    memset(auction_list, 0, MAX_AUCTION_LIST);
     sscanf(buffer, "RMA %s %[^\n]", status, auction_list);
 
     if (!strcmp(status, "OK")) {
@@ -242,7 +243,7 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     
         char AID[4], state[2];
 
-        // Each AID state pair has 6 chars (3 for AID, one for state and one for
+        // Each AID state pair has 6 chars (3 for AID, 1 for state 1 one for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
         for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
@@ -251,6 +252,7 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
             else
                 printf("\"%s\" - closed; ", AID);
         }
+        printf("\n");
     }
 
     else if (!strcmp(status, "NOK"))
@@ -269,9 +271,12 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     
     // LMB message always has 12 chars (3 for LMB, 6 for UID, 1 for spaces, 1
     // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
-    // one \0).
-    
-    char message[12], buffer[MAX_BUFFER_MA_MB], status[4], auction_list[MAX_AUCTION_LIST];
+    // one \0). Auction_list has at most 6002 chars (6 chars per auction * 1000 
+    // maximum auctions + 1 for \n + 1 for for \0). Buffer has variable size, 
+    // but at most 6008 chars (3 for RMB + 1 for space + 2 for status + 6 chars 
+    // per auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
+
+    char message[12], buffer[MAX_BUFFER_MA_MB_L], status[4], auction_list[MAX_AUCTION_LIST];
     sprintf(message, "LMB %s\n", uid);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -281,13 +286,14 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     }
 
     socklen_t addrlen = sizeof(addr);
-    n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
+    n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: mybids response failed\n");
         exit(1);
     }
 
     // reads everything into auction_list until \n character
+    memset(auction_list, 0, MAX_AUCTION_LIST);
     sscanf(buffer, "RMB %s %[^\n]", status, auction_list);
 
     if (!strcmp(status, "OK")) {
@@ -295,7 +301,7 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     
         char AID[4], state[2];
 
-        // Each AID state pair has 6 chars (3 for AID, one for state and one for
+        // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
         for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++) {
@@ -304,6 +310,7 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
             else
                 printf("\"%s\" - closed; ", AID);
         }
+        printf("\n");
     }
 
     else if (!strcmp(status, "NOK"))
@@ -316,8 +323,58 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
         fprintf(stderr, "ERROR: unexpected protocol message\n");
 }
 
-void list(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
+    // verifications are not necessary since the values for uid and password
+    // were previously verified
+    
+    // LST message always has 5 chars. Status message has at most 4 chars (3
+    // letters and one \0). Auction_list has at most 6002 chars (6 chars per
+    // auction * 1000 maximum auctions + 1 for \n + 1 for for \0). Buffer has
+    // variable size, but at most 6008 chars (3 for RLS + 1 for space + 2 for
+    // status + 6 chars per auction * 1000 maximum auctions + 1 for \n + 1 for \0)
 
+    char message[5] = "LST\n";
+    char buffer[MAX_BUFFER_MA_MB_L], status[4], auction_list[MAX_AUCTION_LIST];
+
+    ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/
+        fprintf(stderr, "ERROR: list request failed\n");
+        exit(1);
+    }
+
+    socklen_t addrlen = sizeof(addr);
+    n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
+    if (n == -1) { /*error*/
+        fprintf(stderr, "ERROR: list response failed\n");
+        exit(1);
+    }
+
+    // reads everything into auction_list until \n character
+    memset(auction_list, 0, MAX_AUCTION_LIST);
+    sscanf(buffer, "RLS %s %[^\n]", status, auction_list);
+    printf("\nPRINT1\n%s\n", buffer);
+
+    if (!strcmp(status, "OK")) {
+        printf("List of the currently active auctions: ");
+    
+        char AID[4], state[2];
+
+        // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
+        // space). While the string is not finished, we traverse the string 6 by 
+        // 6, extract the AID and the state from that section and print the section.
+        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", AID, state) != EOF; i++)
+            if (!strcmp(state, "1"))
+                printf("\"%s\" - active; ", AID);
+        // TODO no enunciado diz que são enviadas todas as auctions (assumo que
+        // caiba ao user só dar print das que quer), mas no powerpoint *parece-me* que só envia as ativas
+        printf("\n");
+    }
+
+    else if (!strcmp(status, "NOK"))
+        printf("No auction was yet started.\n");
+    
+    else 
+        fprintf(stderr, "ERROR: unexpected protocol message\n");
 }
 
 void show_asset(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -367,6 +424,11 @@ int main(int argc, char **argv) {
     char uid[7], password[9];
 
     printf("Input your command:\n"); // TODO
+
+    // TODO
+    // "For replies including the status field it takes the value ERR when the
+    // syntax of the request message was incorrect or when the parameter values
+    // take invalid values. If an unexpected protocol message is received, the reply is ERR."
 
     while (1) {
         printf("> ");
@@ -429,7 +491,7 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before requesting bid listing.\n"); 
 
         else if (!strcmp(command, "list") || !strcmp(command, "l"))
-            list(args, fd, res, addr);
+            list(fd, res, addr);
 
         else if (!strcmp(command, "show_asset") || !strcmp(command, "sa"))
             show_asset(args, fd, res, addr);
@@ -440,7 +502,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(command,  "show_record") || !strcmp(command,  "sr"))
             show_record(args, fd, res, addr);
 
-        else if (!strcmp(command,  "exit")) {
+        else if (!strcmp(command, "exit")) {
             if (logged_in)
                 printf("WARNING: Please log out before exiting.\n");
             else

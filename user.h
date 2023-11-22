@@ -26,7 +26,7 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
 
 void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void list(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void list(int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 void show_asset(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 

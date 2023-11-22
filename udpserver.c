@@ -9,12 +9,14 @@
 #include <string.h>
 #define PORT "58046"
 
+#define BUFFER_SIZE 6008
+
 int fd, errcode;
 ssize_t n;
 socklen_t addrlen;
 struct addrinfo hints, *res;
 struct sockaddr_in addr;
-char buffer[128];
+char buffer[BUFFER_SIZE];
 
 int main() {
 	fd = socket(AF_INET, SOCK_DGRAM, 0); //UDP socket
@@ -33,15 +35,15 @@ int main() {
 
 	while (1) {
 		addrlen = sizeof(addr);
-		n = recvfrom(fd, buffer, 128, 0, (struct sockaddr*) &addr, &addrlen);
+		n = recvfrom(fd, buffer, BUFFER_SIZE, 0, (struct sockaddr*) &addr, &addrlen);
 
 		if (n == -1) /*error*/ exit(1);
 		write(1, "received: ", 10);
 		write(1, buffer, n);
 		write(1, "\n", 1);
 
-		memset(buffer, 0, 128);
-		read(0, buffer, 128);
+		memset(buffer, 0, BUFFER_SIZE);
+		read(0, buffer, BUFFER_SIZE);
 		
 		n = sendto(fd, buffer, strlen(buffer) * sizeof(char), 0, (struct sockaddr*) &addr, addrlen);
 		if (n == -1) /*error*/ exit(1);
