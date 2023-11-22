@@ -155,8 +155,8 @@ int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockad
     // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
-    char message[22], buffer[128], status[4];        // TODO
-    sprintf(message, "LIN %s %s \n", uid, password);
+    char message[21], buffer[128], status[4];        // TODO
+    sprintf(message, "LIN %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/ 
@@ -650,7 +650,7 @@ int main(int argc, char **argv) {
     int fd, errcode;
     struct addrinfo hints, *res;
     struct sockaddr_in addr;
-    char comonthand[100], args[100];         // TODO
+    char command[100], args[100];         // TODO
 
     fd = socket(AF_INET, SOCK_DGRAM, 0); // UDP socket
     if (fd == -1) {  /*error*/ 
@@ -672,13 +672,13 @@ int main(int argc, char **argv) {
     int logged_in = 0;
     char uid[7], password[9];
 
-    printf("Input your comonthand:\n");
+    printf("Input your command:\n");
 
     while (1) {
         printf("> ");
-        scanf("%s", comonthand);
+        scanf("%s", command);
 
-        if (!strcmp(comonthand, "login")) {
+        if (!strcmp(command, "login")) {
             // read or flush the rest of the input if already logged in
             fgets(args, 100, stdin);    // TODO
 
@@ -692,7 +692,7 @@ int main(int argc, char **argv) {
             }
         }
 
-        else if (!strcmp(comonthand, "logout")) {
+        else if (!strcmp(command, "logout")) {
             if (logged_in) {
                 logout(uid, password, fd, res, addr);
                 logged_in = 0;
@@ -702,7 +702,7 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before logging out.\n");
         }
 
-        else if (!strcmp(comonthand, "unregister")) {
+        else if (!strcmp(command, "unregister")) {
             if (logged_in) {
                 unregister(uid, password, fd, res, addr);
                 logged_in = 0;
@@ -712,14 +712,14 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before unregistering.\n");
         }
 
-        else if (!strcmp(comonthand,  "open")) {
+        else if (!strcmp(command,  "open")) {
             open_auction(args, fd, res, addr);
         }
 
-        else if (!strcmp(comonthand, "close"))
+        else if (!strcmp(command, "close"))
             close_auction(args, fd, res, addr);
 
-        else if (!strcmp(comonthand, "myauctions") || !strcmp(comonthand, "ma")) {
+        else if (!strcmp(command, "myauctions") || !strcmp(command, "ma")) {
             if (logged_in)
                 myauctions(uid, fd, res, addr);
 
@@ -727,30 +727,30 @@ int main(int argc, char **argv) {
                 printf("WARNING: No user is logged in. Please log in before requesting auction listing.\n");            
         }
 
-        else if (!strcmp(comonthand, "mybids") || !strcmp(comonthand, "mb"))
+        else if (!strcmp(command, "mybids") || !strcmp(command, "mb"))
             if (logged_in)
                 mybids(uid, fd, res, addr);
 
             else
                 printf("WARNING: No user is logged in. Please log in before requesting bid listing.\n"); 
 
-        else if (!strcmp(comonthand, "list") || !strcmp(comonthand, "l"))
+        else if (!strcmp(command, "list") || !strcmp(command, "l"))
             list(fd, res, addr);
 
-        else if (!strcmp(comonthand, "show_asset") || !strcmp(comonthand, "sa"))
+        else if (!strcmp(command, "show_asset") || !strcmp(command, "sa"))
             show_asset(args, fd, res, addr);
 
-        else if (!strcmp(comonthand, "bid") || !strcmp(comonthand, "b"))
+        else if (!strcmp(command, "bid") || !strcmp(command, "b"))
             bid(args, fd, res, addr);
 
-        else if (!strcmp(comonthand, "show_record") || !strcmp(comonthand, "sr")) {
+        else if (!strcmp(command, "show_record") || !strcmp(command, "sr")) {
             char aid[4];
             getchar();               // consumes the space
             fgets(aid, 4, stdin);
             show_record(aid, fd, res, addr);
         }
 
-        else if (!strcmp(comonthand, "exit")) {
+        else if (!strcmp(command, "exit")) {
             if (logged_in)
                 printf("WARNING: Please log out before exiting.\n");
             else
@@ -759,7 +759,7 @@ int main(int argc, char **argv) {
 
         else {
             fgets(args, 100, stdin);    // flush the rest of the input 
-            printf("Comonthand not found. Please try again\n");
+            printf("Command not found. Please try again\n");
         }
     }
     
