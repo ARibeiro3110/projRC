@@ -355,6 +355,7 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
             }
         }
         printf("\n");
+    }
 
     else if (!strcmp(status, "NOK"))
         printf("User has no ungoing auctions. Auctions listing failed.\n");
@@ -526,13 +527,13 @@ void bid(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
 
 void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     if (strlen(aid) != 3 || !is_numeric(aid)) {
-        fprintf(stderr, "usage: show_record <AID: 6 digits>\n\tor sr <AID: 6 digits>\n");
+        fprintf(stderr, "usage: show_record <AID: 3 digits>\n\t\bor sr <AID: 3 digits>\n");
         return;
     }
     
     // SRC message always has 9 chars (3 for SRC, 3 for AID, 1 for spaces, 1
     // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
-    // one \0). 
+    // one \0).
     
     // TODO: Auction_list has at most 6002 chars (6 chars per auction * 1000 
     // maximum auctions + 1 for \n + 1 for for \0). Buffer has variable size, 
@@ -556,8 +557,6 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
         fprintf(stderr, "ERROR: list response failed\n");
         exit_user(1, fd, res, addr);
     }
-
-    memset(bid_info, 0, sizeof(bid_info));
 
     // Using this format, bid_info will always have a \n at the beginning. If
     // no bids were specified and if we used another format which matched the \n 
@@ -589,11 +588,9 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
             char bid_info_line[100], bidder_uid[7], bid_value[100], bid_date[11], bid_time[9], 
                  bid_sec_time[7]; // TODO
             
-            int i = 0;
-            
-            // we start reading the string after the initial '\n', hence the i+1
-            while (sscanf(&bid_info[i+1], "%[^\n]", bid_info_line) != EOF) {
-                sscanf(bid_info_line, "B %s %s %s %s %s\n", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
+            int bid_info_length;
+            for (int i = 0; bid_info[i] == ' ' && strlen(&bid_info[i]) != 1; i += bid_info_length) {
+                sscanf(&bid_info[i + 1], "B %s %s %s %s %s", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
 
                 if (strlen(bidder_uid) != 6 || !is_numeric(bidder_uid) 
                     || strlen(bid_value) > 6 || !is_numeric(bid_value) 
@@ -603,11 +600,9 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
                     return;
                 }
 
-                printf("\tbid: user: %s, value=%s, %s %s, %s\n", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
-                
-                // skip the length of a bid information line to read the 
-                // following line, if there is one
-                i += strlen(bid_info_line) + 1;
+                // 7 is for the 'B' and the spaces
+                bid_info_length = 7 + strlen(bidder_uid) + strlen(bid_value) + strlen(bid_date) + strlen(bid_time) + strlen(bid_sec_time);
+                printf("\t\bbid: user: %s, value=%s, %s %s, %s\n", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
             }
         }
         
@@ -747,7 +742,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(command, "show_record") || !strcmp(command, "sr")) {
             char aid[4];
             getchar();               // consumes the space
-            fgets(aid, 4, stdin);
+            fgets(aid, 4, stdin);   // TODO
             show_record(aid, fd, res, addr);
         }
 
