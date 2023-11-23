@@ -61,15 +61,15 @@ int is_date(char *word) {
     int year, month, day;
     sscanf(word, "%d-%d-%d", &year, &month, &day);
 
-    if (year <= 2023) 
+    if (year >= 0) 
         if (1 <= month <=12) {
             if ((1 <= day <= 31) && (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12))
                 return 1;
             else if ((1 <= day <= 30) && (month == 4 || month == 6 || month == 9 || month == 11))
                 return 1;
-            else if((1 <= day<=28) && month == 2)
+            else if ((1 <= day <= 28) && month == 2)
                 return 1;
-            else if(day == 29 && month == 2 && (year % 400 == 0 ||(year % 4 == 0 && year % 100 != 0)))
+            else if (day == 29 && month == 2 && (year % 400 == 0 ||(year % 4 == 0 && year % 100 != 0)))
                 return 1;
             else
                 return 0;
@@ -83,7 +83,7 @@ int is_date(char *word) {
 
 int is_time(char *word) {
     int l = strlen(word);
-    for (int i = 0; i < l; i++) {   // YYYY-MM-DD
+    for (int i = 0; i < l; i++) {
         if ((i == 2 || i == 5) && word[i] != ':')
             return 0;
         else if (i != 2 && i != 5 && ('0' < word[i] || word[i] < '9'))
