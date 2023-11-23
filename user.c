@@ -328,8 +328,7 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     }
 
     // reads everything into auction_list until \n character
-    memset(auction_list, 0, MAX_AUCTION_LIST);
-    sscanf(buffer, "RMA %s %[^\n]", status, auction_list);
+    sscanf(buffer, "RMA %s%[^\n]", status, auction_list);
 
     if (!strcmp(status, "OK")) {
         printf("List of user's auctions: ");
@@ -339,7 +338,8 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
-        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", aid, state) != EOF; i++) {
+        for (int i = 0; auction_list[6*i] == ' '; i++) {
+            sscanf(&auction_list[6*i + 1], "%s %s", aid, state);
             if (strlen(aid) != 3) {
                 fprintf(stderr, "ERROR: AID %s is not valid.\n", aid);
                 return;
@@ -355,7 +355,6 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
             }
         }
         printf("\n");
-    }
 
     else if (!strcmp(status, "NOK"))
         printf("User has no ungoing auctions. Auctions listing failed.\n");
@@ -401,7 +400,6 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     }
 
     // reads everything into auction_list until \n character
-    memset(auction_list, 0, MAX_AUCTION_LIST);
     sscanf(buffer, "RMB %s %[^\n]", status, auction_list);
 
     if (!strcmp(status, "OK")) {
@@ -412,7 +410,8 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
-        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", aid, state) != EOF; i++) {
+        for (int i = 0; auction_list[6*i] == ' '; i++) {
+            sscanf(&auction_list[6*i + 1], "%s %s", aid, state);
             if (strlen(aid) != 3) {
                 fprintf(stderr, "ERROR: AID %s is not valid.\n", aid);
                 return;
@@ -470,7 +469,6 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
     }
 
     // reads everything into auction_list until \n character
-    memset(auction_list, 0, MAX_AUCTION_LIST);
     sscanf(buffer, "RLS %s %[^\n]", status, auction_list);
 
     if (!strcmp(status, "OK")) {
@@ -486,7 +484,8 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
         // 6, extract the AID and the state from that section and print the section.
-        for (int i = 0; sscanf(&auction_list[6*i], "%s %s ", aid, state) != EOF; i++) {
+        for (int i = 0; auction_list[6*i] == ' '; i++) {
+            sscanf(&auction_list[6*i + 1], "%s %s", aid, state);
             if (strlen(aid) != 3) {
                 fprintf(stderr, "ERROR: AID %s is not valid.\n", aid);
                 return;
@@ -495,7 +494,7 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
             if (!strcmp(state, "1"))
                 printf("\"%s\" - active; ", aid);
             else if (!strcmp(state, "0"))
-                fprintf(stderr, "ERROR: list is returning inactive auctions.\n");
+                printf("\"%s\" - closed; ", aid);
             else {
                 fprintf(stderr, "ERROR: state %s is not valid.\n", state);
                 return;
