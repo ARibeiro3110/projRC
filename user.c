@@ -54,7 +54,7 @@ int is_date(char *word) {
     for (int i = 0; i < l; i++) {   // YYYY-MM-DD
         if ((i == 4 || i == 7) && word[i] != '-')
             return 0;
-        else if (i != 4 && i != 7 && ('0' < word[i] || word[i] < '9'))
+        else if (i != 4 && i != 7 && ('0' > word[i] || word[i] > '9'))
             return 0;
     }
 
@@ -86,7 +86,7 @@ int is_time(char *word) {
     for (int i = 0; i < l; i++) {
         if ((i == 2 || i == 5) && word[i] != ':')
             return 0;
-        else if (i != 2 && i != 5 && ('0' < word[i] || word[i] < '9'))
+        else if (i != 2 && i != 5 && ('0' > word[i] || word[i] > '9'))
             return 0;
     }
 
@@ -570,9 +570,11 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
             auction_name, asset_fname, start_value, start_date, start_time, 
             timeactive, bid_info, closed_info);
 
-    if (strlen(host_uid) != 6 || !is_numeric(host_uid) || !is_filename(asset_fname) 
-        || !is_numeric(start_value) || !is_date(start_date) || !is_time(start_time)
-        || strlen(timeactive) != 6 || !is_numeric(timeactive)) {
+    if (strlen(host_uid) != 6 || !is_numeric(host_uid) || strlen(auction_name) > 10 
+        || !is_alphanumeric(auction_name) || !is_filename(asset_fname) 
+        || strlen(start_value) > 6 || !is_numeric(start_value) 
+        || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5 
+        || !is_numeric(timeactive)) {
         fprintf(stderr, "ERROR: server sent message in wrong format\n");
         return;
     }
@@ -594,9 +596,9 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
                 sscanf(bid_info_line, "B %s %s %s %s %s\n", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
 
                 if (strlen(bidder_uid) != 6 || !is_numeric(bidder_uid) 
-                    || !is_numeric(bid_value) || !is_date(bid_date) 
-                    || !is_time(bid_time) || strlen(bid_sec_time) != 6 
-                    || !is_numeric(bid_sec_time)) {
+                    || strlen(bid_value) > 6 || !is_numeric(bid_value) 
+                    || !is_date(bid_date) || !is_time(bid_time) 
+                    || strlen(bid_sec_time) > 5 || !is_numeric(bid_sec_time)) {
                     fprintf(stderr, "ERROR: server sent message in wrong format\n");
                     return;
                 }
@@ -614,7 +616,7 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
             sscanf(closed_info, "E %s %s %s\n", end_date, end_time, end_sec_time);
 
             if (!is_date(end_date) || !is_time(end_time) 
-                || strlen(end_sec_time) != 6 || !is_numeric(end_sec_time)) {
+                || strlen(end_sec_time) > 5 || !is_numeric(end_sec_time)) {
                     fprintf(stderr, "ERROR: server sent message in wrong format\n");
                     return;
                 }
