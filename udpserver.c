@@ -9,7 +9,7 @@
 #include <string.h>
 #define PORT "58046"
 
-#define BUFFER_SIZE 6008
+#define BUFFER_SIZE 6009
 
 int fd, errcode;
 ssize_t n;

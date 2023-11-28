@@ -18,7 +18,7 @@ void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sock
 
 void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void open_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void open_auction(char *uid, char *password, char *name, char *asset_fname, char *start_value, char *timeactive, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 void close_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
@@ -34,6 +34,6 @@ void bid(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
 void show_record(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr);
 
-void exit_user(int exit_status, int fd, struct addrinfo *res, struct sockaddr_in addr);
+void exit_user(int exit_status, int fd, struct addrinfo *res);
 
 #endif
