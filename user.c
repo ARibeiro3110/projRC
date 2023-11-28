@@ -195,9 +195,12 @@ void handle_arguments(int argc, char **argv, char *ASIP, char *ASport) {
 }
 
 int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockaddr_in addr) {     
-    if (strlen(uid) != 6 || strlen(password) != 8 || !is_alphanumeric(password) || !is_numeric(uid)) {
+    long length_password = strlen(password), length_uid = strlen(uid);
+    
+    if (length_uid != 6 || length_password != 8 || !is_alphanumeric(password) || !is_numeric(uid)) {
         fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
-        while (getchar() != '\n');  // flushes the rest of the input
+        if (length_uid > 6 || length_password > 8)
+            while (getchar() != '\n');  // flushes the rest of the input
         return 0;
     }
 
@@ -341,7 +344,16 @@ void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct 
         fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
-void open_auction(char *uid, char *password, char *name, char *asset_fname, char *start_value, char *timeactive, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void open_auction(char *uid, char *password, char *name, char *asset_fname, 
+                  char *start_value, char *timeactive, int fd, 
+                  struct addrinfo *res, struct sockaddr_in addr) {
+    if (strlen(name) > 10 || is_alphanumeric(name) || !is_filename(asset_fname) 
+        || strlen(start_value) > 6 || !is_numeric(start_value) 
+        || strlen(timeactive) > 5 || !is_numeric(timeactive)) {
+        fprintf(stderr, "usage: open <name: up to 10 alphanumeric chars> <asset_fname: up to 24 alphanumeric chars (plus '-','_', '.') with file extension> <start_value: up to 6 digits> <timeactive: up to 5 digits>\n");
+        return;
+    }
+    
     char message[21], buffer[128]; //TODO
 
     int file_fd = open("ABCDE.txt", O_RDONLY);
