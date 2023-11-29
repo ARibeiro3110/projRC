@@ -42,13 +42,13 @@ int is_filename(char *word) {
     for (int i = 0; i < l; i++) {
         if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z' 
               || 'a' <= word[i] <= 'z' || word[i] == '-' 
-              || word[i] == '_' || word[i] == '.'))
+              || word[i] == '_' || word[i] == '.')) 
             return 0;
         
         if (i == l - 4 && word[i] != '.')
             return 0;
         
-        if (i > l - 4 && ('a' > word[i] || word[i] > 'z' || '0' > word[i] || word[i] > '9'))
+        if (i > l - 4 && !('a' <= word[i] <= 'z' || '0' <= word[i] <= '9'))
             return 0;
     }
     return 1;
@@ -207,7 +207,7 @@ int login(char *uid, char *password, int fd, struct addrinfo *res, struct sockad
     // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
-    char message[21], buffer[9], status[4];
+    char message[21] = "", buffer[9] = "", status[4] = "";
     sprintf(message, "LIN %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -263,7 +263,7 @@ void logout(char *uid, char *password, int fd, struct addrinfo *res, struct sock
     // LOU message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
-    char message[21], buffer[9], status[4];
+    char message[21] = "", buffer[9] = "", status[4] = "";
     sprintf(message, "LOU %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -307,7 +307,7 @@ void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct 
     // UNR message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0). 
-    char message[21], buffer[9], status[4];
+    char message[21] = "", buffer[9] = "", status[4] = "";
     sprintf(message, "UNR %s %s\n", uid, password);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -345,18 +345,39 @@ void unregister(char *uid, char *password, int fd, struct addrinfo *res, struct 
 }
 
 void open_auction(char *uid, char *password, char *name, char *asset_fname, 
-                  char *start_value, char *timeactive, int fd, 
-                  struct addrinfo *res, struct sockaddr_in addr) {
-    if (strlen(name) > 10 || is_alphanumeric(name) || !is_filename(asset_fname) 
+                  char *start_value, char *timeactive, char *ASIP, char *ASport) {
+    if (strlen(name) > 10 || !is_alphanumeric(name) || !is_filename(asset_fname) 
         || strlen(start_value) > 6 || !is_numeric(start_value) 
         || strlen(timeactive) > 5 || !is_numeric(timeactive)) {
         fprintf(stderr, "usage: open <name: up to 10 alphanumeric chars> <asset_fname: up to 24 alphanumeric chars (plus '-','_', '.') with file extension> <start_value: up to 6 digits> <timeactive: up to 5 digits>\n");
         return;
     }
     
-    char message[21], buffer[128]; //TODO
+    // open tcp socket
+    int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
+    if (fd == -1) exit(1); //error
 
-    int file_fd = open("ABCDE.txt", O_RDONLY);
+    struct addrinfo hints, *res;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET; //IPv4
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
+
+    int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
+    if (errcode != 0) {  /*error*/ 
+        fprintf(stderr, "ERROR: Server not found\n");
+        exit_user(1, fd, res);
+    }
+
+    int n = connect(fd, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: Connect to server failed\n");
+        exit_user(1, fd, res);
+    }
+
+    char message[78] = "", buffer[128] = "";
+
+    int file_fd = open(asset_fname, O_RDONLY);
     long f_size = 0;
 
     // calculate the file size
@@ -364,13 +385,13 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
     lseek(file_fd, 0, SEEK_SET);   // reset pointer to beginning
 
     sprintf(message, "OPA %s %s %s %s %s %s %ld ", uid, password, name, start_value, timeactive, asset_fname, f_size);
-    int n = write(fd, message, strlen(message));
+
+    n = write(fd, message, strlen(message));
     if (n == -1) { /*error*/ 
         fprintf(stderr, "ERROR: open_auction information write failed\n");
+        freeaddrinfo(res); 
         exit_user(1, fd, res);
     }
-
-    printf("---> ;%s", message);
 
     int bytes_read = 0;
     while ((bytes_read = read(file_fd, buffer, 128)) != 0) {
@@ -380,10 +401,7 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
             fprintf(stderr, "ERROR: open_auction data write failed\n");
             exit_user(1, fd, res);
         }
-        printf("%s", buffer);
     }
-
-    printf(";");
 
     // write terminator (\n)
     n = write(fd, "\n", 1);
@@ -424,10 +442,93 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
     else 
         fprintf(stderr, "ERROR: Server sent unknown message.\n");
+
+    freeaddrinfo(res);
+    close(fd); 
 }
 
-void close_auction(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASport) {
+    if (aid[3] == '\n')
+        aid[3] = '\0';
+    else {
+        fprintf(stderr, "usage: close <AID: 3 digits>\n");
+        if (strlen(aid) > 3)
+            while (getchar() != '\n');  // flushes the rest of the input
+        return;
+    }
 
+    if (strlen(aid) != 3 || !is_numeric(aid)) {
+        fprintf(stderr, "usage: close <AID: 3 digits>\n");
+        return;
+    }
+    
+    // open tcp socket
+    int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
+    if (fd == -1) exit(1); //error
+
+    struct addrinfo hints, *res;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET; //IPv4
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
+
+    int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
+    if (errcode != 0) {  /*error*/ 
+        fprintf(stderr, "ERROR: Server not found\n");
+        exit_user(1, fd, res);
+    }
+
+    int n = connect(fd, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: Connect to server failed\n");
+        exit_user(1, fd, res);
+    }
+
+    char message[25] = "", buffer[128] = "";
+    sprintf(message, "CLS %s %s %s\n", uid, password, aid);
+
+    n = write(fd, message, strlen(message));
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: close_auction information write failed\n");
+        exit_user(1, fd, res);
+    }
+    
+    char status[4];
+    n = read(fd, buffer, 12);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: close_auction read failed\n");
+        exit_user(1, fd, res);
+    }
+    buffer[n] = '\0';
+
+    sscanf(buffer, "RCL %s\n", status);
+
+    if (!strcmp(status, "OK") && buffer[6] == '\n')
+        printf("Auction %s was closed.\n", aid);
+    
+    else if (!strcmp(status, "EAU") && buffer[7] == '\n')
+        printf("Auction %s could not be found.\n", aid);
+    
+    else if (!strcmp(status, "NLG") && buffer[7] == '\n')
+        printf("User is not logged in.\n");
+    
+    else if (!strcmp(status, "EOW") && buffer[7] == '\n')
+        printf("Auction %s is not owned by %s.\n", aid, uid);
+    
+    else if (!strcmp(status, "END") && buffer[7] == '\n')
+        printf("Auction %s has already finished.\n", aid);
+
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
+    else 
+        fprintf(stderr, "ERROR: Server sent unknown message.\n");
+
+    freeaddrinfo(res);
+    close(fd);
 }
 
 void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -441,7 +542,9 @@ void myauctions(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr
     // 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars per 
     // auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
-    char message[12], buffer[MAX_BUFFER_MA_MB_L], status[4], auction_list[MAX_AUCTION_LIST];
+    char message[12] = "", buffer[MAX_BUFFER_MA_MB_L] = "", status[4] = "", 
+        auction_list[MAX_AUCTION_LIST] = "";
+    
     sprintf(message, "LMA %s\n", uid);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -519,7 +622,9 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     // 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars per 
     // auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
-    char message[12], buffer[MAX_BUFFER_MA_MB_L], status[4], auction_list[MAX_AUCTION_LIST];
+    char message[12] = "", buffer[MAX_BUFFER_MA_MB_L] = "", status[4] = "", 
+         auction_list[MAX_AUCTION_LIST] = "";
+    
     sprintf(message, "LMB %s\n", uid);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -546,7 +651,7 @@ void mybids(char *uid, int fd, struct addrinfo *res, struct sockaddr_in addr) {
     if (!strcmp(status, "OK") && buffer[7 + strlen(auction_list)] == '\n') {
         printf("List of user's bids: ");
     
-        char aid[4], state[2];
+        char aid[4] = "", state[2] = "";
 
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
@@ -593,8 +698,8 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
     // variable size, but at most 6008 chars (3 for RLS + 1 for space + 2 for
     // status + 6 chars per auction * 1000 maximum auctions + 1 for \n + 1 for \0)
 
-    char message[5] = "LST\n";
-    char buffer[MAX_BUFFER_MA_MB_L], status[4], auction_list[MAX_AUCTION_LIST];
+    char message[5] = "LST\n", buffer[MAX_BUFFER_MA_MB_L] = "", status[4] = "", 
+         auction_list[MAX_AUCTION_LIST] = "";
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
     if (n == -1) { /*error*/
@@ -625,7 +730,7 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
 
         printf("List of the currently active auctions: ");
     
-        char aid[4], state[2];
+        char aid[4] = "", state[2] = "";
 
         // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
         // space). While the string is not finished, we traverse the string 6 by 
@@ -662,8 +767,87 @@ void list(int fd, struct addrinfo *res, struct sockaddr_in addr) {
         fprintf(stderr, "ERROR: Server sent unknown message.\n");
 }
 
-void show_asset(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
+void show_asset(char *aid, char *ASIP, char *ASport) {
+    if (aid[3] == '\n')
+        aid[3] = '\0';
+    else {
+        fprintf(stderr, "usage: show_asset <AID: 3 digits>\n\t\bor sa <AID: 3 digits>\n");
+        if (strlen(aid) > 3)
+            while (getchar() != '\n');  // flushes the rest of the input
+        return;
+    }
 
+    if (strlen(aid) != 3 || !is_numeric(aid)) {
+        fprintf(stderr, "usage: show_asset <AID: 3 digits>\n\t\bor sa <AID: 3 digits>\n");
+        return;
+    }
+
+    // open tcp socket
+    int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
+    if (fd == -1) exit(1); //error
+
+    struct addrinfo hints, *res;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET; //IPv4
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
+
+    int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
+    if (errcode != 0) {  /*error*/ 
+        fprintf(stderr, "ERROR: Server not found\n");
+        exit_user(1, fd, res);
+    }
+
+    int n = connect(fd, res->ai_addr, res->ai_addrlen);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: Connect to server failed\n");
+        exit_user(1, fd, res);
+    }
+
+    char message[9] = "";
+    sprintf(message, "SAS %s\n", aid);
+
+    n = write(fd, message, strlen(message));
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: show_asset write failed\n");
+        exit_user(1, fd, res);
+    }
+
+    char response[26] = "", status[4] = "", fname[11] = "", fsize[8] = "", buffer[128] = "";
+    n = read(fd, response, 26);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: show_asset read failed\n");
+        exit_user(1, fd, res);
+    }
+    response[n] = '\0';
+
+    printf(";%s;\n", response);
+
+     n = read(fd, response, 26);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: show_asset read failed\n");
+        exit_user(1, fd, res);
+    }
+    response[n] = '\0';
+
+    printf(";%s;\n", response);
+
+    sscanf(response, "RSA %3s %10s %7s", status, fname, fsize);
+    int file_fd = open(fname, O_CREAT | O_WRONLY);
+
+    int size = atoi(fsize); 
+    for (int bytes_read = 0; bytes_read < size; bytes_read += n) {
+        n = read(fd, buffer, 128);
+        if (n == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: show_asset read failed\n");
+            exit_user(1, fd, res);
+        }
+        write(file_fd, buffer, 128);
+    }
+
+    close(file_fd);
+    freeaddrinfo(res);
+    close(fd);
 }
 
 void bid(char *args, int fd, struct addrinfo *res, struct sockaddr_in addr) {
@@ -687,16 +871,17 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
     
     // SRC message always has 9 chars (3 for SRC, 3 for AID, 1 for spaces, 1
     // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
-    // one \0).
-    
-    // TODO: Auction_list has at most 6002 chars (6 chars per auction * 1000 
-    // maximum auctions + 1 for \n + 1 for for \0). Buffer has variable size, 
-    // but at most 6008 chars (3 for RMB + 1 for space + 2 for status + 6 chars 
-    // per auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
+    // one \0). bid_info has at most 2102 chars ((1+1+6+1+6+1+10+1+8+1+5)*50 for
+    // the bids + 1 for initial \n + 1 for \0). closed_info has at most 28 chars 
+    // (27 for info + 1 for \0). buffer has at most 2213 chars (3 for RRC + 2 
+    // for status + 6 for host_uid + 10 for auction_name + 24 for asset_fname + 
+    // 6 for start_value + 10 for start_date + 8 for start_time + 5 for timeactive 
+    // + 2102 from bid_info + 28 chars).
 
-    char message[9], buffer[2213], status[4], host_uid[7], auction_name[11], 
-         asset_fname[25], start_value[7], start_date[11], start_time[9], timeactive[6],
-         bid_info[2102], closed_info[28]; // TODO
+    char message[9] = "", buffer[2213] = "", status[4] = "", host_uid[7] = "", 
+         auction_name[11] = "", asset_fname[25] = "", start_value[7] = "", 
+         start_date[11] = "", start_time[9] = "", timeactive[6] = "", 
+         bid_info[2102] = "", closed_info[28] = ""; 
     sprintf(message, "SRC %s\n", aid);
 
     ssize_t n = sendto(fd, message, strlen(message) * sizeof(char), 0, res->ai_addr, res->ai_addrlen);
@@ -723,36 +908,39 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
             status, host_uid, auction_name, asset_fname, start_value, 
             start_date, start_time, timeactive, bid_info, closed_info);
 
-    if (strlen(host_uid) != 6 || !is_numeric(host_uid) || strlen(auction_name) > 10 
-        || !is_alphanumeric(auction_name) || !is_filename(asset_fname) 
-        || strlen(start_value) > 6 || !is_numeric(start_value) 
-        || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5 
-        || !is_numeric(timeactive) || strlen(closed_info) > 27) {
-        fprintf(stderr, "ERROR: server sent message in wrong format\n");
-        return;
-    }
-
     if (!strcmp(status, "OK")) {
+        if (strlen(host_uid) != 6 || !is_numeric(host_uid) || strlen(auction_name) > 10 
+            || !is_alphanumeric(auction_name) || !is_filename(asset_fname) 
+            || strlen(start_value) > 6 || !is_numeric(start_value) 
+            || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5 
+            || !is_numeric(timeactive) || strlen(closed_info) > 27) {
+            fprintf(stderr, "ERROR: server sent message in wrong format\n");
+            return;
+        }
+
         // check for terminator
         int bid = strlen(bid_info) - 1 != 0, closed = strlen(closed_info) != 0;
+        long auction_info_size = 37 + strlen(auction_name) + strlen(asset_fname) + strlen(start_value) + strlen(timeactive);
+        long bid_info_size = strlen(bid_info);
+        long closed_info_size = strlen(closed_info);
 
-        if (bid == 1 && closed == 1 && buffer[83 + strlen(bid_info) + strlen(closed_info)] != '\n') {
-            fprintf(stderr, "ERROR: server sent message in wrong format\n");
+        if (bid == 1 && closed == 1 && buffer[auction_info_size + bid_info_size + closed_info_size] != '\n') {
+            fprintf(stderr, "ERROR: server sent message with bids and closure info but with no terminator\n");
             return;
         }
 
-        else if (bid == 0 && closed == 1 && buffer[83 + 1 + strlen(closed_info)] != '\n') {
-            fprintf(stderr, "ERROR: server sent message in wrong format\n");
+        else if (bid == 0 && closed == 1 && buffer[auction_info_size + 1 + closed_info_size] != '\n') {
+            fprintf(stderr, "ERROR: server sent message with closure info but with no terminator\n");
             return;
         }
 
-        else if (bid == 1 && closed == 0 && buffer[83 + strlen(bid_info)] != '\n') {
-            fprintf(stderr, "ERROR: server sent message in wrong format\n");
+        else if (bid == 1 && closed == 0 && buffer[auction_info_size + bid_info_size - 1] != '\n') {
+            fprintf(stderr, "ERROR: server sent message with bids info but with no terminator\n");
             return;
         }
 
-        else if (bid == 0 && closed == 0 && buffer[83] != '\n') {
-            fprintf(stderr, "ERROR: server sent message in wrong format\n");
+        else if (bid == 0 && closed == 0 && buffer[auction_info_size] != '\n') {
+            fprintf(stderr, "ERROR: server sent message with no additional info and with no terminator\n");
             return;
         }
         
@@ -761,9 +949,10 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
                timeactive);
 
         if (bid) {
-            char bidder_uid[7], bid_value[7], bid_date[11], bid_time[9], 
-                 bid_sec_time[6]; 
+            char bidder_uid[7] = "", bid_value[7] = "", bid_date[11] = "", 
+                 bid_time[9] = "", bid_sec_time[6] = ""; 
             int bid_info_length;
+            
             for (int i = 0; bid_info[i] == ' ' && strlen(&bid_info[i]) != 1; i += bid_info_length) {
                 sscanf(&bid_info[i + 1], "B %6s %6s %10s %8s %s", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
 
@@ -771,7 +960,7 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
                     || strlen(bid_value) > 6 || !is_numeric(bid_value) 
                     || !is_date(bid_date) || !is_time(bid_time) 
                     || strlen(bid_sec_time) > 5 || !is_numeric(bid_sec_time)) {
-                    fprintf(stderr, "ERROR: server sent message in wrong format\n");
+                    fprintf(stderr, "ERROR: server sent message in wrong bids format\n");
                     return;
                 }
 
@@ -782,12 +971,12 @@ void show_record(char *aid, int fd, struct addrinfo *res, struct sockaddr_in add
         }
         
         if (closed) {
-            char end_date[11], end_time[9], end_sec_time[7];
+            char end_date[11] = "", end_time[9] = "", end_sec_time[7] = "";
             sscanf(closed_info, "E %10s %8s %s\n", end_date, end_time, end_sec_time);
-
+            
             if (!is_date(end_date) || !is_time(end_time) 
                 || strlen(end_sec_time) > 5 || !is_numeric(end_sec_time)) {
-                    fprintf(stderr, "ERROR: server sent message in wrong format\n");
+                    fprintf(stderr, "ERROR: server sent message in wrong closure format\n");
                     return;
                 }
 
@@ -815,13 +1004,13 @@ void exit_user(int exit_status, int fd, struct addrinfo *res) {
 }
 
 int main(int argc, char **argv) {
-    char ASIP[16], ASport[6];
+    char ASIP[16] = "", ASport[6] = "";
     handle_arguments(argc, argv, ASIP, ASport);
 
     int fd_udp, fd_tcp, errcode;
-    struct addrinfo hints_udp, hints_tcp, *res_udp, *res_tcp;
+    struct addrinfo hints_udp, *res_udp, *res_tcp;
     struct sockaddr_in addr;
-    char command[12], args[54];
+    char command[12] = "", args[54] = "";
 
     // open UDP socket
     fd_udp = socket(AF_INET, SOCK_DGRAM, 0); // UDP socket
@@ -840,29 +1029,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "ERROR: Server not found\n");
         exit_user(1, fd_udp, res_udp);
     }
-
-    // open TCP socket
-    fd_tcp = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    if (fd_tcp == -1) exit(1); //error
-
-    memset(&hints_tcp, 0, sizeof hints_tcp);
-    hints_tcp.ai_family = AF_INET; //IPv4
-    hints_tcp.ai_socktype = SOCK_STREAM; //TCP socket
-
-    errcode = getaddrinfo(ASIP, ASport, &hints_tcp, &res_tcp);
-    if (errcode != 0) {  /*error*/ 
-        fprintf(stderr, "ERROR: Server not found\n");
-        exit_user(1, fd_tcp, res_tcp);
-    }
-
-    int n = connect(fd_tcp, res_tcp->ai_addr, res_tcp->ai_addrlen);
-    if (n == -1) { /*error*/ 
-        fprintf(stderr, "ERROR: Connect to server failed\n");
-        exit_user(1, fd_tcp, res_tcp);
-    }
     
     int logged_in = 0;
-    char uid[7], password[9], aid[5];
+    char uid[7] = "", password[9] = "", aid[5] = "";
 
     printf("Input your command:\n");
 
@@ -907,7 +1076,8 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(command, "open")) {
-            char name[11], asset_fname[25], start_value[7], timeactive[6];
+            char name[11] = "", asset_fname[25] = "", start_value[7] = "", 
+                 timeactive[6] = "";
             
             getchar();      // consumes the space
             // read or flush the rest of the input if already logged in
@@ -915,14 +1085,22 @@ int main(int argc, char **argv) {
             sscanf(args, "%s %s %s %s\n", name, asset_fname, start_value, timeactive);
 
             if (logged_in)
-                open_auction(uid, password, name, asset_fname, start_value, timeactive, fd_tcp, res_tcp, addr);
+                open_auction(uid, password, name, asset_fname, start_value, timeactive, ASIP, ASport);
 
             else
                 printf("WARNING: No user is logged in. Please log in before requesting auction opening.\n");   
         }
 
-        else if (!strcmp(command, "close"))
-            close_auction(args, fd_udp, res_udp, addr);
+        else if (!strcmp(command, "close")) {
+            getchar();               // consumes the space
+            fgets(aid, 5, stdin);   
+
+            if (logged_in)
+                close_auction(uid, password, aid, ASIP, ASport);
+            
+            else
+                printf("WARNING: No user is logged in. Please log in before requesting auction closure.\n");  
+        }       
 
         else if (!strcmp(command, "myauctions") || !strcmp(command, "ma")) {
             if (logged_in)
@@ -942,8 +1120,11 @@ int main(int argc, char **argv) {
         else if (!strcmp(command, "list") || !strcmp(command, "l"))
             list(fd_udp, res_udp, addr);
 
-        else if (!strcmp(command, "show_asset") || !strcmp(command, "sa"))
-            show_asset(args, fd_tcp, res_tcp, addr);
+        else if (!strcmp(command, "show_asset") || !strcmp(command, "sa")) {
+            getchar();               // consumes the space
+            fgets(aid, 5, stdin);
+            show_asset(aid, ASIP, ASport);
+        }
 
         else if (!strcmp(command, "bid") || !strcmp(command, "b"))
             bid(args, fd_tcp, res_tcp, addr);
