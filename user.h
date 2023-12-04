@@ -19,9 +19,6 @@ int is_time(char *word);
 /* Returns 1 if the string is a valid IPv4 address and 0 otherwise */
 int is_ipv4(char *ASIP);
 
-/* Returns 1 if the string is a valid port number and 0 otherwise */
-int is_port_no(char* ASport);
-
 /* Assigns ASIP and ASport values according to the given input */
 void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport);
 

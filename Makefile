@@ -1,5 +1,5 @@
 CC = gcc
-TARGETS = user udpserver
+TARGETS = common user udpserver AS
 
 all: $(TARGETS)
 
