@@ -11,8 +11,8 @@
 
 #include "user.h"
 
-#define DEFAULT_IP "localhost"
-#define DEFAULT_PORT "58046"   // 58000 + 46 (group number)
+#define DEFAULT_IP                   "localhost"
+#define DEFAULT_PORT                 "58046"   // 58000 + 46 (group number)
 
 #define LIN_LOU_UNR_MESSAGE_SIZE     21
 #define RLI_RLO_RUR_MESSAGE_SIZE     9
@@ -783,7 +783,7 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
         return;
     }
     
-    if (!strcmp(status, "OK") && buffer[7 + strlen(auction_list)] == '\n') {
+    if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
         if (!strlen(auction_list)) {
             printf("No auctions are currently active.\n");
             return;
