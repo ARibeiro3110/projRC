@@ -1,22 +1,12 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 
-#include <unistd.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <stdio.h>
-#include <string.h>
-#include <fcntl.h>
-
 #define DEFAULT_IP                   "localhost"
 #define DEFAULT_PORT                 "58046"   // 58000 + 46 (group number)
 
 #define LIN_LOU_UNR_MESSAGE_SIZE     21
 #define RLI_RLO_RUR_MESSAGE_SIZE     9
+#define MESSAGE_TYPE_SIZE            4
 #define STATUS_SIZE                  4
 #define AID_SIZE                     4
 #define OPA_MESSAGE_SIZE             78

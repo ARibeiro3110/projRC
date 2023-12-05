@@ -1,3 +1,14 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+
 #include "common.h"
 #include "user.h"
 
@@ -109,10 +120,6 @@ int is_ipv4(char *ASIP) {
         if (0 > ip_numbers[i] || ip_numbers[i] > 255)
             return 0;
     return 1;
-}
-
-int is_port_no(char* ASport) {
-    return 0 < atoi(ASport) && atoi(ASport) <= 99999;
 }
 
 void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
@@ -443,7 +450,7 @@ void read_tcp_socket(int fd, struct addrinfo *res, char *buffer) {
 
 void write_from_file_to_socket(int file_fd, char *buffer, int fd, struct addrinfo *res) {
     // write the rest of the message (data from the file)
-    int bytes_read = 0, n;
+    int sum = 0, bytes_read = 0, n;
     while ((bytes_read = read(file_fd, buffer, 128)) != 0) {
         buffer[bytes_read] = '\0';
         n = write(fd, buffer, bytes_read);
@@ -451,6 +458,7 @@ void write_from_file_to_socket(int file_fd, char *buffer, int fd, struct addrinf
             fprintf(stderr, "ERROR: data write to socket failed\n");
             exit_error(fd, res);
         }
+        sum += bytes_read;
     }
 
     // write terminator (\n)
@@ -783,10 +791,11 @@ void list(char *ASIP, char *ASport) {
     handle_list_response(status, buffer, auction_list);
 }
 
-void copy_from_socket_to_file(int written, int size, int fd, struct addrinfo *res, int file_fd) {
+void copy_from_socket_to_file(long written, int size, int fd, struct addrinfo *res, int file_fd) {
     int bytes_read = 0, n;
     char data[BUFFER_DEFAULT] = "";
-    
+    memset(data, 0, 128);
+
     while (written < size) {
         bytes_read = read(fd, data, 128);
         if (bytes_read == -1) { /*error*/ 
@@ -815,16 +824,14 @@ void handle_show_asset_response(char *status, char *prefix, int fd, struct addri
     if (!strcmp(status, "OK")) {
         char buffer[128] = "", fname[25] = "", fsize[8] = "", data[128] = "";
         
-        int bytes_read = 0; 
-        do {
-            n = read(fd, &buffer[bytes_read], 7);
-            if (n == -1) { /*error*/ 
-                fprintf(stderr, "ERROR: show_asset read failed\n");
-                exit_error(fd, res);
-            }
-            bytes_read += n;
+        long written = 0; 
+        
+        n = read(fd, buffer, 128);
+        if (n == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: show_asset read failed\n");
+            exit_error(fd, res);
         }
-        while (sscanf(buffer, "%24s %7s %s", fname, fsize, data) < 3);
+        sscanf(buffer, "%24s %7s", fname, fsize);
 
         long fname_size = strlen(fname), fsize_size = strlen(fsize);
 
@@ -841,8 +848,7 @@ void handle_show_asset_response(char *status, char *prefix, int fd, struct addri
         int file_fd = open(fname, O_CREAT | O_WRONLY | O_TRUNC);
         
         // write data that came with the rest of the information
-        int written = 0;
-        n = write(file_fd, data, strlen(data));
+        n = write(file_fd, &buffer[fname_size + 2 + fsize_size], 128 - (fname_size + 2 + fsize_size));
         if (n == -1) { /*error*/ 
             fprintf(stderr, "ERROR: show_asset data write failed\n");
             exit_error(fd, res);
@@ -850,7 +856,7 @@ void handle_show_asset_response(char *status, char *prefix, int fd, struct addri
         written += n;
 
         // write the rest of the data
-        int size = atoi(fsize);
+        long size = atol(fsize);
         copy_from_socket_to_file(written, size, fd, res, file_fd);
         close(file_fd);
 
@@ -909,14 +915,12 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     
     // read only until the status code, if status = OK, then read the rest, else 
     // print message and return
-    do {
-        n = read(fd, prefix, 7);
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: show_asset read failed\n");
-            exit_error(fd, res);
-        }
+    n = read(fd, prefix, 7);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: show_asset read failed\n");
+        exit_error(fd, res);
     }
-    while (sscanf(prefix, "RSA %3s", status) != 1);
+    sscanf(prefix, "RSA %3s", status);
 
     handle_show_asset_response(status, prefix, fd, res);
     close(fd);
