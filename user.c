@@ -12,22 +12,6 @@
 #include "common.h"
 #include "user.h"
 
-int is_numeric(char *word) {
-    int l = strlen(word);
-    for (int i = 0; i < l; i++)
-        if ('0' > word[i] || word[i] > '9')
-            return 0;
-    return 1;
-}
-
-int is_alphanumeric(char *word) {
-    int l = strlen(word);
-    for (int i = 0; i < l; i++)
-        if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z' || 'a' <= word[i] <= 'z'))
-            return 0;
-    return 1;
-}
-
 int is_filename(char *word) {
     int l = strlen(word);
 
@@ -247,41 +231,33 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     close(fd);
 }
 
-int login_handle_response(char *status, char *buffer) {
-    if (buffer[3] != ' ') {
+int handle_login_response(char *status, char *buffer) {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+ 
+    else if (buffer[3] != ' ')
         fprintf(stderr, "Server message includes whitespaces other than ' '.\n");
-        return 0;
-    }
 
-    if (!strcmp(status, "OK") && buffer[6] == '\n') {
+    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User logged in.\n");
         return 1;
     }
     
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n') {
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n') 
         printf("Password is incorrect. Log in failed. Please try again.\n");
-        return 0;
-    }
     
     else if (!strcmp(status, "REG") && buffer[7] == '\n') {
         printf("New user sucessfully created and logged in.\n");
         return 1;
     }
 
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n') {
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-        return 0;
-    }
-    
-    else if (!strcmp(buffer, "ERR\n")) {
-        printf("Unexpected protocol message.\n");
-        return 0;
-    }
 
-    else {
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
-        return 0;
-    }
+
+    return 0;
 }
 
 int login(char *uid, char *password, char *ASIP, char *ASport) {     
@@ -305,35 +281,37 @@ int login(char *uid, char *password, char *ASIP, char *ASport) {
     sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport);
     sscanf(buffer, "RLI %s\n", status);
 
-    return login_handle_response(status, buffer);
+    return handle_login_response(status, buffer);
 }
 
-void handle_logout_response(char *status, char *buffer) {
-    if (buffer[3] != ' ') {
+int handle_logout_response(char *status, char *buffer) {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (buffer[3] != ' ') 
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-        return;
+    
+    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
+        printf("User logged out.\n");
+        return 1;
     }
     
-    if (!strcmp(status, "OK") && buffer[6] == '\n')
-        printf("User logged out.\n");
-    
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n') 
         printf("User was not logged in. Logout failed.\n");
-    
+
     else if (!strcmp(status, "UNR") && buffer[7] == '\n')
         printf("User is not registered.\n");
 
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
+
+    return 0;
 }
 
-void logout(char *uid, char *password, char *ASIP, char *ASport) {
+int logout(char *uid, char *password, char *ASIP, char *ASport) {
     // verifications are not necessary since the values for uid and password 
     // were previously verified
     
@@ -347,17 +325,20 @@ void logout(char *uid, char *password, char *ASIP, char *ASport) {
     sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport);
     sscanf(buffer, "RLO %s\n", status);
 
-    handle_logout_response(status, buffer);
+    return handle_logout_response(status, buffer);
 }
 
-void handle_unregister_response(char *status, char *buffer) {
-    if (buffer[3] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-        return;
-    }
+int handle_unregister_response(char *status, char *buffer) {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
     
-    if (!strcmp(status, "OK") && buffer[6] == '\n')
+    else if (buffer[3] != ' ')
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+    
+    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User unregistered.\n");
+        return 1;
+    }
     
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User was not logged in. Unregistered failed.\n");
@@ -368,14 +349,13 @@ void handle_unregister_response(char *status, char *buffer) {
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
-
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
+    
+    return 0;
 }
 
-void unregister(char *uid, char *password, char *ASIP, char *ASport) {
+int unregister(char *uid, char *password, char *ASIP, char *ASport) {
     // verifications are not necessary since the values for uid and password 
     // were previously verified
     
@@ -389,16 +369,19 @@ void unregister(char *uid, char *password, char *ASIP, char *ASport) {
     sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport);
     sscanf(buffer, "RUR %s\n", status);
 
-    handle_unregister_response(status, buffer);
+    return handle_unregister_response(status, buffer);
 }
 
 void handle_open_auction_response(char *status, char *aid, char *buffer) {
-    if (buffer[3] != ' ' || buffer[4 + strlen(status)] != ' ') {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (buffer[3] != ' ' || buffer[4 + strlen(status)] != ' ') {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
     
-    if (!strcmp(status, "OK") && (strlen(aid) != 3 || !is_numeric(aid))) {
+    else if (!strcmp(status, "OK") && (strlen(aid) != 3 || !is_numeric(aid))) {
         fprintf(stderr, "ERROR: server sent message in wrong format\n");
         return;
     }
@@ -414,9 +397,6 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -522,12 +502,15 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 }
 
 void handle_close_auction_response(char *status, char *aid, char *uid, char *buffer) {
-    if (buffer[3] != ' ') {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (buffer[3] != ' ') {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
     
-    if (!strcmp(status, "OK") && buffer[6] == '\n')
+    else if (!strcmp(status, "OK") && buffer[6] == '\n')
         printf("Auction %s was closed.\n", aid);
     
     else if (!strcmp(status, "EAU") && buffer[7] == '\n')
@@ -544,9 +527,6 @@ void handle_close_auction_response(char *status, char *aid, char *uid, char *buf
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -628,12 +608,15 @@ void print_aid_state(char *auction_list) {
 }
 
 void handle_myauctions_response(char *status, char *buffer, char *auction_list) {
-    if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
     
-    if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
+    else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
         printf("List of user's auctions: ");
         print_aid_state(auction_list);
         printf("\n");
@@ -647,9 +630,6 @@ void handle_myauctions_response(char *status, char *buffer, char *auction_list) 
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -684,12 +664,15 @@ void myauctions(char *uid, char *ASIP, char *ASport) {
 }
 
 void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
-    if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
     
-    if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
+    else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
         printf("List of user's bids: ");
         print_aid_state(auction_list);
         printf("\n");
@@ -703,9 +686,6 @@ void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -740,12 +720,15 @@ void mybids(char *uid, char *ASIP, char *ASport) {
 }
 
 void handle_list_response(char *status, char *buffer, char *auction_list) {
-    if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
     
-    if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
+    else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
         if (!strlen(auction_list)) {
             printf("No auctions are currently active.\n");
             return;
@@ -761,9 +744,6 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -816,12 +796,15 @@ void copy_from_socket_to_file(long written, int size, int fd, struct addrinfo *r
 void handle_show_asset_response(char *status, char *prefix, int fd, struct addrinfo *res) {
     int n;
 
-    if (prefix[3] != ' ') {
+    if (!strcmp(prefix, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
+    else if (prefix[3] != ' ') {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
 
-    if (!strcmp(status, "OK")) {
+    else if (!strcmp(status, "OK")) {
         char buffer[128] = "", fname[25] = "", fsize[8] = "", data[128] = "";
         
         long written = 0; 
@@ -868,9 +851,6 @@ void handle_show_asset_response(char *status, char *prefix, int fd, struct addri
     
     else if (!strcmp(status, "ERR"))
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(prefix, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -927,12 +907,15 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 }
 
 void handle_bid_response(char *status, char *aid , char *response) {
-    if (response[3] != ' ') {
+    if (!strcmp(response, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+    
+    else if (response[3] != ' ') {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
     
-    if (!strcmp(status, "ACC")) 
+    else if (!strcmp(status, "ACC")) 
         printf("Your bid was accepted.\n");
 
     else if (!strcmp(status, "REF"))
@@ -949,9 +932,6 @@ void handle_bid_response(char *status, char *aid , char *response) {
     
     else if (!strcmp(status, "ERR"))
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(response, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -1124,12 +1104,15 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             status, host_uid, auction_name, asset_fname, start_value, 
             start_date, start_time, timeactive, bid_info, closed_info);
 
-    if (buffer[3] != ' ') {
+    if (!strcmp(buffer, "ERR\n"))
+        printf("Unexpected protocol message.\n");
+
+    else if (buffer[3] != ' ') {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
 
-    if (!strcmp(status, "OK")) {
+    else if (!strcmp(status, "OK")) {
         long auction_name_size = strlen(auction_name), asset_fname_size = strlen(asset_fname),
              start_value_size = strlen(start_value);
 
@@ -1176,9 +1159,6 @@ void show_record(char *aid, char *ASIP, char *ASport) {
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("Auction with AID %s does not exist.\n", aid);
-    
-    else if (!strcmp(buffer, "ERR\n"))
-        printf("Unexpected protocol message.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -1215,8 +1195,8 @@ int main(int argc, char **argv) {
 
         else if (!strcmp(command, "logout")) {
             if (logged_in) {
-                logout(uid, password, ASIP, ASport);
-                logged_in = 0;
+                if (logout(uid, password, ASIP, ASport))
+                    logged_in = 0;
             }
             
             else
@@ -1225,8 +1205,8 @@ int main(int argc, char **argv) {
 
         else if (!strcmp(command, "unregister")) {
             if (logged_in) {
-                unregister(uid, password, ASIP, ASport);
-                logged_in = 0;
+                if (unregister(uid, password, ASIP, ASport))
+                    logged_in = 0;
             }
 
             else

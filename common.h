@@ -41,4 +41,10 @@
 /* Returns 1 if the string is a valid port number and 0 otherwise */
 int is_port_no(char* ASport);
 
+/* Returns 1 if the string is only composed of digits and 0 otherwise */
+int is_numeric(char *word);
+
+/* Returns 1 if the string is only composed of alphanumeric characters and 0 otherwise */
+int is_alphanumeric(char* word);
+
 #endif

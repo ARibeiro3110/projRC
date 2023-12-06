@@ -1,12 +1,6 @@
 #ifndef __USER_H__
 #define __USER_H__
 
-/* Returns 1 if the string is only composed of digits and 0 otherwise */
-int is_numeric(char *word);
-
-/* Returns 1 if the string is only composed of alphanumeric characters and 0 otherwise */
-int is_alphanumeric(char* word);
-
 /* Returns 1 if the string represents a filename and 0 otherwise */
 int is_filename(char *word);
 
@@ -26,22 +20,22 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport);
 void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP, char *ASport);
 
 /* Handles login server responses */
-int login_handle_response(char *status, char *buffer);
+int handle_login_response(char *status, char *buffer);
 
 /* Registers the user into the system or logs him in */
 int login(char *uid, char *password, char *ASIP, char *ASport);
 
 /* Handles logout server responses */
-void handle_logout_response(char *status, char *buffer);
+int handle_logout_response(char *status, char *buffer);
 
 /* Logs the user of the current session out */
-void logout(char *uid, char *password, char *ASIP, char *ASport);
+int logout(char *uid, char *password, char *ASIP, char *ASport);
 
 /* Handles unregister server responses */
-void handle_unregister_response(char *status, char *buffer);
+int handle_unregister_response(char *status, char *buffer);
 
 /* Unregisters the user from the service */
-void unregister(char *uid, char *password, char *ASIP, char *ASport);
+int unregister(char *uid, char *password, char *ASIP, char *ASport);
 
 /* Handles open_auction server responses */
 void handle_open_auction_response(char *status, char *aid, char *buffer);
