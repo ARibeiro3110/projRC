@@ -81,10 +81,10 @@ void handle_list_response(char *status, char *buffer, char *auction_list);
 void list(char *ASIP, char *ASport);
 
 /* Transfers data from the socket to a local file */
-void copy_from_socket_to_file(long written, int size, int fd, struct addrinfo *res, int file_fd);
+void copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp);
 
 /* Handles show_asset server responses */
-void handle_show_asset_response(char *status, char *prefix, int fd, struct addrinfo *res);
+void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, struct addrinfo *res);
 
 /* Transfers the asset of the auction to the local computer */
 void show_asset(char *aid, char *ASIP, char *ASport);

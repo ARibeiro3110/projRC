@@ -16,7 +16,7 @@
 #define LMA_LMB_MESSAGE_SIZE         12
 #define LST_MESSAGE_SIZE             5
 #define SAS_MESSAGE_SIZE             9
-#define RSA_PREFIX_SIZE              8
+#define RSA_PREFIX_SIZE              40
 #define BID_MESSAGE_SIZE             32
 #define RBD_MESSAGE_SIZE             8
 #define UID_SIZE                     7
@@ -28,6 +28,7 @@
 #define SRC_BUFFER_SIZE              2213
 #define NAME_SIZE                    11
 #define FILENAME_SIZE                25
+#define FILESIZE_SIZE                8
 #define BID_INFO_SIZE                2102
 #define CLOSED_INFO_SIZE             28
 #define MAX_BUFFER_MA_MB_L           6008

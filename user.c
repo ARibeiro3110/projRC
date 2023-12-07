@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "common.h"
 #include "user.h"
@@ -771,8 +772,8 @@ void list(char *ASIP, char *ASport) {
     handle_list_response(status, buffer, auction_list);
 }
 
-void copy_from_socket_to_file(long written, int size, int fd, struct addrinfo *res, int file_fd) {
-    int bytes_read = 0, n;
+void copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
+    int written = 0, bytes_read = 0, n;
     char data[BUFFER_DEFAULT] = "";
     memset(data, 0, 128);
 
@@ -783,7 +784,11 @@ void copy_from_socket_to_file(long written, int size, int fd, struct addrinfo *r
             exit_error(fd, res);
         }
 
-        n = write(file_fd, data, bytes_read);
+        if (bytes_read == size + 1 && data[bytes_read - 1] == '\n')
+            // doesn't write the \n char
+            bytes_read--;
+
+        n = fwrite(data, 1, bytes_read, fp);
         if (n == -1) { /*error*/ 
             fprintf(stderr, "ERROR: copied data write to file failed\n");
             exit_error(fd, res);
@@ -793,55 +798,19 @@ void copy_from_socket_to_file(long written, int size, int fd, struct addrinfo *r
     }
 }
 
-void handle_show_asset_response(char *status, char *prefix, int fd, struct addrinfo *res) {
+void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, struct addrinfo *res) {
     int n;
 
-    if (!strcmp(prefix, "ERR\n"))
-        printf("Unexpected protocol message.\n");
-
-    else if (prefix[3] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-        return;
-    }
-
-    else if (!strcmp(status, "OK")) {
-        char buffer[128] = "", fname[25] = "", fsize[8] = "", data[128] = "";
-        
-        long written = 0; 
-        
-        n = read(fd, buffer, 128);
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: show_asset read failed\n");
-            exit_error(fd, res);
-        }
-        sscanf(buffer, "%24s %7s", fname, fsize);
-
-        long fname_size = strlen(fname), fsize_size = strlen(fsize);
-
-        if (buffer[fname_size] != ' ' || buffer[fname_size + fsize_size + 1] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+    if (!strcmp(status, "OK")) {
+        FILE *fp = fopen(fname, "w");
+        if (fp == NULL) {
+            fprintf(stderr, "ERROR: could not open file. ERRCODE %d\n", errno);
             return;
         }
 
-        if (!is_filename(fname) || strlen(fsize) > 7 || !is_numeric(fsize)) {
-            fprintf(stderr, "ERROR: server sent message in the wrong format\n");
-            exit_error(fd, res);
-        }
-      
-        int file_fd = open(fname, O_CREAT | O_WRONLY | O_TRUNC);
-        
-        // write data that came with the rest of the information
-        n = write(file_fd, &buffer[fname_size + 2 + fsize_size], 128 - (fname_size + 2 + fsize_size));
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: show_asset data write failed\n");
-            exit_error(fd, res);
-        }
-        written += n;
-
-        // write the rest of the data
         long size = atol(fsize);
-        copy_from_socket_to_file(written, size, fd, res, file_fd);
-        close(file_fd);
+        copy_from_socket_to_file(size, fd, res, fp);
+        fclose(fp);
 
         printf("File %s was sucessfully created on your computer.\n", fname);
     }
@@ -891,18 +860,44 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     connsend_tcp_socket(message, fd, res, ASIP, ASport);
 
     int n;
-    char prefix[RSA_PREFIX_SIZE] = "", status[STATUS_SIZE] = "";
+    char prefix[RSA_PREFIX_SIZE], status[STATUS_SIZE], fname[FILENAME_SIZE] = "", fsize[FILESIZE_SIZE] = "";
+    int spaces = 0; 
     
-    // read only until the status code, if status = OK, then read the rest, else 
-    // print message and return
-    n = read(fd, prefix, 7);
-    if (n == -1) { /*error*/ 
-        fprintf(stderr, "ERROR: show_asset read failed\n");
+    for (int i = 0; i < RSA_PREFIX_SIZE; i++) {
+        n = read(fd, &prefix[i], 1);
+        if (n == -1) {
+            fprintf(stderr, "ERROR: show_asset read failed\n");
+            return;
+        }
+
+        if (!strcmp(prefix, "ERR\n")) {
+            printf("Unexpected protocol message.\n");
+            return;
+        }
+
+        if (prefix[i] == ' ')
+            spaces++;
+
+        if (spaces == 4)
+            break;
+    }
+
+    sscanf(prefix, "RSA %s %s %s ", status, fname, fsize);
+    long status_size = strlen(status), fname_size = strlen(fname), fsize_size = strlen(fsize);
+
+    if (prefix[3] != ' ' || prefix[4 + status_size] != ' ' 
+        || prefix[5 + status_size + fname_size] != ' ' 
+        || prefix[6 + status_size + fname_size + fsize_size] != ' ') {
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+        return;
+    }
+
+    if (!is_filename(fname) || strlen(fsize) > 7 || !is_numeric(fsize)) {
+        fprintf(stderr, "ERROR: server sent message in the wrong format\n");
         exit_error(fd, res);
     }
-    sscanf(prefix, "RSA %3s", status);
 
-    handle_show_asset_response(status, prefix, fd, res);
+    handle_show_asset_response(status, fname, fsize, fd, res);
     close(fd);
 }
 

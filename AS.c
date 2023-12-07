@@ -277,12 +277,6 @@ void handle_logout_request(char *uid, char *user_password, int fd, struct sockad
         if (!found_pass && !found_login)
             sprintf(response, "RLO UNR\n");
 
-        //else if (!found_pass && found_login) {
-        //    fprintf(stderr, "ERROR: file login exists without pass file.\n");
-        //    sprintf(response, "ERR\n");
-        //    exit(1); 
-        //}
-
         else if (found_pass && !found_login)
             sprintf(response, "RLO NOK\n");
 
@@ -348,12 +342,6 @@ void handle_unregister_request(char *uid, char *user_password, int fd, struct so
 
         if (!found_pass && !found_login)
             sprintf(response, "RUR UNR\n");
-
-        //else if (!found_pass && found_login) {
-        //    fprintf(stderr, "ERROR: file login exists without pass file.\n");
-        //    sprintf(response, "ERR\n");
-        //    exit(1); 
-        //}
 
         else if (found_pass && !found_login)
             sprintf(response, "RUR NOK\n");
@@ -671,21 +659,21 @@ int main(int argc, char **argv) {
 
     handle_main_arguments(argc, argv, ASport, &verbose);
 
-    fd = socket(AF_INET, SOCK_DGRAM, 0); //UDP socket
-	if (fd == -1) /*error*/ exit(1);
-
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_INET; // IPv4
-	hints.ai_socktype = SOCK_DGRAM; // UDP socket
-	hints.ai_flags = AI_PASSIVE;
-
-	errcode = getaddrinfo("localhost", ASport, &hints, &res);
-	if (errcode != 0) /*error*/ exit(1);
-
-	n = bind(fd, res->ai_addr, res->ai_addrlen);
-	if (n == -1) /*error*/ exit(1);
-
 	while (1) {
+        fd = socket(AF_INET, SOCK_DGRAM, 0); //UDP socket
+        if (fd == -1) /*error*/ exit(1);
+
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_INET; // IPv4
+        hints.ai_socktype = SOCK_DGRAM; // UDP socket
+        hints.ai_flags = AI_PASSIVE;
+
+        errcode = getaddrinfo("localhost", ASport, &hints, &res);
+        if (errcode != 0) /*error*/ exit(1);
+
+        n = bind(fd, res->ai_addr, res->ai_addrlen);
+        if (n == -1) /*error*/ exit(1);
+
 		addrlen = sizeof(addr);
 		n = recvfrom(fd, buffer, MAX_BUFFER_MA_MB_L, 0, (struct sockaddr*) &addr, &addrlen);
         if (n == -1) /*error*/ exit(1);
@@ -771,10 +759,10 @@ int main(int argc, char **argv) {
         }
 
         else {}
-	}
 
-	freeaddrinfo(res);
-	close(fd);
+        freeaddrinfo(res);
+        close(fd);
+	}
 
     return 0;
 }
