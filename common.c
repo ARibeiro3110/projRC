@@ -31,3 +31,86 @@ int is_alphanumeric(char *word) {
             return 0;
     return 1;
 }
+
+int is_filename(char *word) {
+    int l = strlen(word);
+
+    if (l > 24)
+        return 0;
+
+    for (int i = 0; i < l; i++) {
+        if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z' 
+              || 'a' <= word[i] <= 'z' || word[i] == '-' 
+              || word[i] == '_' || word[i] == '.')) 
+            return 0;
+        
+        if (i == l - 4 && word[i] != '.')
+            return 0;
+        
+        if (i > l - 4 && !('a' <= word[i] <= 'z' || '0' <= word[i] <= '9'))
+            return 0;
+    }
+    return 1;
+}
+
+int is_date(char *word) {
+    int l = strlen(word);
+
+    if (l != 10)
+        return 0;
+
+    for (int i = 0; i < l; i++) {   // YYYY-MM-DD
+        if ((i == 4 || i == 7) && word[i] != '-')
+            return 0;
+        else if (i != 4 && i != 7 && ('0' > word[i] || word[i] > '9'))
+            return 0;
+    }
+
+    int year, month, day;
+    sscanf(word, "%4d-%2d-%2d", &year, &month, &day);
+
+    if (year >= 0) 
+        if (1 <= month <=12) {
+            if ((1 <= day <= 31) && (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12))
+                return 1;
+            else if ((1 <= day <= 30) && (month == 4 || month == 6 || month == 9 || month == 11))
+                return 1;
+            else if ((1 <= day <= 28) && month == 2)
+                return 1;
+            else if (day == 29 && month == 2 && (year % 400 == 0 ||(year % 4 == 0 && year % 100 != 0)))
+                return 1;
+            else
+                return 0;
+        }
+        else
+            return 0;
+    else
+        return 0;
+    return 1;
+}
+
+int is_time(char *word) {
+    int l = strlen(word);
+
+    if (l != 8)
+        return 0;
+
+    for (int i = 0; i < l; i++) {
+        if ((i == 2 || i == 5) && word[i] != ':')
+            return 0;
+        else if (i != 2 && i != 5 && ('0' > word[i] || word[i] > '9'))
+            return 0;
+    }
+
+    int hours, minutes, seconds;
+    sscanf(word, "%2d:%2d:%2d", &hours, &minutes, &seconds);
+
+    if (0 > hours || hours > 24)
+        return 0;
+    if (0 > minutes || minutes > 60)
+        return 0;
+    if (0 > seconds || seconds > 60)
+        return 0;
+
+    return 1;
+}
