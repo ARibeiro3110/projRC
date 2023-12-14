@@ -102,12 +102,6 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     }
 }
 
-void exit_error(int fd, struct addrinfo *res) {
-    freeaddrinfo(res);
-    close(fd); 
-    exit(1);
-}
-
 void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP, char *ASport) {
     int fd, errcode;
     struct addrinfo hints, *res;
@@ -123,6 +117,15 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; // IPv4
     hints.ai_socktype = SOCK_DGRAM; // UDP socket
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // 5 seconds timeout
+    timeout.tv_usec = 0;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+        exit_error(fd, res);
+    }
 
     errcode = getaddrinfo(ASIP, ASport, &hints, &res);
     if (errcode != 0) {  /*error*/ 
@@ -291,10 +294,18 @@ int unregister(char *uid, char *password, char *ASIP, char *ASport) {
 }
 
 void handle_open_auction_response(char *status, char *aid, char *buffer) {
-    if (!strcmp(buffer, "ERR\n"))
+    if (!strcmp(buffer, "ERR\n")) {
         printf("Unexpected protocol message.\n");
+        return;
+    }
+
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n') {
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+        return;
+    }
     
     else if (buffer[3] != ' ' || buffer[4 + strlen(status)] != ' ') {
+        printf(";%s;\n", buffer);
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
         return;
     }
@@ -312,9 +323,6 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
     
     else if (!strcmp(status, "NLG") && buffer[7] == '\n')
         printf("User is not logged in.\n");
-
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
-        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -335,36 +343,20 @@ void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP
 }
 
 void read_tcp_socket(int fd, struct addrinfo *res, char *buffer) {
+    memset(buffer, 0, 128);
+    
     int bytes_read = 0, n;
     while ((n = read(fd, &buffer[bytes_read], 12)) != 0) {
         if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: read failed\n");
+            fprintf(stderr, "ERROR: read failed %d\n", errno);
             exit_error(fd, res);
         }
         bytes_read += n;
+        
+        if (buffer[bytes_read - 1] == '\n')
+            break;
     }
     buffer[bytes_read] = '\0';
-}
-
-void write_from_file_to_socket(int file_fd, char *buffer, int fd, struct addrinfo *res) {
-    // write the rest of the message (data from the file)
-    int sum = 0, bytes_read = 0, n;
-    while ((bytes_read = read(file_fd, buffer, 128)) != 0) {
-        buffer[bytes_read] = '\0';
-        n = write(fd, buffer, bytes_read);
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: data write to socket failed\n");
-            exit_error(fd, res);
-        }
-        sum += bytes_read;
-    }
-
-    // write terminator (\n)
-    n = write(fd, "\n", 1);
-    if (n == -1) { /*error*/ 
-        fprintf(stderr, "ERROR: terminator write failed\n");
-        exit_error(fd, res);
-    }
 }
 
 void open_auction(char *uid, char *password, char *name, char *asset_fname, 
@@ -385,6 +377,15 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
     struct addrinfo *res, hints;
     
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // 5 seconds timeout
+    timeout.tv_usec = 0;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+        exit_error(fd, res);
+    }
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
     hints.ai_socktype = SOCK_STREAM; //TCP socket   
@@ -397,24 +398,30 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
     
     char message[OPA_MESSAGE_SIZE] = "", buffer[BUFFER_DEFAULT] = "";
 
-    int file_fd = open(asset_fname, O_RDONLY);
+    FILE *file_fd = fopen(asset_fname, "r");
     long f_size = 0;
 
     // calculate the file size
-    f_size = lseek(file_fd, 0, SEEK_END);
-    lseek(file_fd, 0, SEEK_SET);   // reset pointer to beginning
+    f_size = lseek(fileno(file_fd), 0, SEEK_END);
+    lseek(fileno(file_fd), 0, SEEK_SET);   // reset pointer to beginning
 
-    sprintf(message, "OPA %s %s %s %s %s %s %ld ", uid, password, name, start_value, timeactive, asset_fname, f_size);
+    if (f_size == 0) 
+        printf("WARNING: %s file has no content\n", asset_fname);
 
-    connsend_tcp_socket(message, fd, res, ASIP, ASport);
-    write_from_file_to_socket(file_fd, buffer, fd, res);
-    read_tcp_socket(fd, res, buffer);
+    else {
+        sprintf(message, "OPA %s %s %s %s %s %s %ld ", uid, password, name, start_value, timeactive, asset_fname, f_size);
 
-    char status[STATUS_SIZE], aid[AID_SIZE];
-    sscanf(buffer, "ROA %3s %s\n", status, aid);
+        connsend_tcp_socket(message, fd, res, ASIP, ASport);
+        send_asset(file_fd, fd);
+        read_tcp_socket(fd, res, buffer);
 
-    handle_open_auction_response(status, aid, buffer);
+        char status[STATUS_SIZE], aid[AID_SIZE];
+        sscanf(buffer, "ROA %3s %s\n", status, aid);
 
+        handle_open_auction_response(status, aid, buffer);
+    }
+
+    fclose(file_fd);
     freeaddrinfo(res);
     close(fd); 
 }
@@ -470,7 +477,16 @@ void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASpor
     if (fd == -1) exit(1); //error
 
     struct addrinfo *res, hints;
-    
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // 5 seconds timeout
+    timeout.tv_usec = 0;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+        exit_error(fd, res);
+    }
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
     hints.ai_socktype = SOCK_STREAM; //TCP socket   
@@ -689,32 +705,6 @@ void list(char *ASIP, char *ASport) {
     handle_list_response(status, buffer, auction_list);
 }
 
-void copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
-    int written = 0, bytes_read = 0, n;
-    char data[BUFFER_DEFAULT] = "";
-    memset(data, 0, 128);
-
-    while (written < size) {
-        bytes_read = read(fd, data, 128);
-        if (bytes_read == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: data read from socket failed\n");
-            exit_error(fd, res);
-        }
-
-        if (bytes_read == size + 1 && data[bytes_read - 1] == '\n')
-            // doesn't write the \n char
-            bytes_read--;
-
-        n = fwrite(data, 1, bytes_read, fp);
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: copied data write to file failed\n");
-            exit_error(fd, res);
-        }
-        written += n;
-        memset(data, 0, 128);
-    }
-}
-
 void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, struct addrinfo *res) {
     int n;
 
@@ -766,6 +756,15 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     hints.ai_family = AF_INET; //IPv4
     hints.ai_socktype = SOCK_STREAM; //TCP socket   
 
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // 5 seconds timeout
+    timeout.tv_usec = 0;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+        exit_error(fd, res);
+    }
+
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
     if (errcode != 0) {  /*error*/ 
         fprintf(stderr, "ERROR: server not found\n");
@@ -776,9 +775,8 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     sprintf(message, "SAS %s\n", aid);
     connsend_tcp_socket(message, fd, res, ASIP, ASport);
 
-    int n;
+    int n, spaces = 0, bytes_read = 0;
     char prefix[RSA_PREFIX_SIZE], status[STATUS_SIZE], fname[FILENAME_SIZE] = "", fsize[FILESIZE_SIZE] = "";
-    int spaces = 0; 
     
     for (int i = 0; i < RSA_PREFIX_SIZE; i++) {
         n = read(fd, &prefix[i], 1);
@@ -797,7 +795,10 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 
         if (spaces == 4)
             break;
+        
+        bytes_read += n;
     }
+    prefix[bytes_read] = '\0';
 
     sscanf(prefix, "RSA %s %s %s ", status, fname, fsize);
     long status_size = strlen(status), fname_size = strlen(fname), fsize_size = strlen(fsize);
@@ -859,6 +860,15 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
     if (fd == -1) exit(1); //error
 
     struct addrinfo *res, hints;
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;  // 5 seconds timeout
+    timeout.tv_usec = 0;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+        exit_error(fd, res);
+    }
     
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
@@ -876,16 +886,17 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
     connsend_tcp_socket(message, fd, res, ASIP, ASport);
 
     char response[RBD_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
-    int n;
-    do {
-        n = read(fd, response, 7);
+    int n, bytes_read = 0;
+    while ((n = read(fd, response, 8)) != 0) {
         if (n == -1) { /*error*/ 
             fprintf(stderr, "ERROR: bid read failed\n");
             exit_error(fd, res);
         }
+        bytes_read += n;
     }
-    while (sscanf(response, "RBD %3s", status) != 1);
+    response[bytes_read] = '\0';
 
+    sscanf(response, "RBD %3s", status);
     handle_bid_response(status, aid, response);
 
     freeaddrinfo(res);

@@ -71,9 +71,6 @@ void handle_list_response(char *status, char *buffer, char *auction_list);
 /* Lists all auctions in the system */
 void list(char *ASIP, char *ASport);
 
-/* Transfers data from the socket to a local file */
-void copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp);
-
 /* Handles show_asset server responses */
 void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, struct addrinfo *res);
 

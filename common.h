@@ -10,7 +10,7 @@
 #define STATUS_SIZE                  4
 #define AID_SIZE                     4
 #define OPA_MESSAGE_SIZE             78
-#define BUFFER_DEFAULT               128
+#define BUFFER_DEFAULT               4096
 #define CLS_MESSAGE_SIZE             25
 #define STATE_SIZE                   2
 #define LMA_LMB_MESSAGE_SIZE         12
@@ -39,6 +39,8 @@
 #define ASIP_SIZE                    16
 #define ASPORT_SIZE                  6
 
+void exit_error(int fd, struct addrinfo *res);
+
 /* Returns 1 if the string is a valid port number and 0 otherwise */
 int is_port_no(char* ASport);
 
@@ -56,5 +58,14 @@ int is_date(char *word);
 
 /* Returns 1 if the string represents a time and 0 otherwise */
 int is_time(char *word);
+
+/* Copies data from a socket to a given file (fp) */
+int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp);
+
+/* Sends asset through the socket */
+void send_asset(FILE *file_fd, int fd);
+
+/* Calculates the order of magnitude of a number */
+int OoM(long number);
 
 #endif

@@ -9,8 +9,15 @@
 #include <string.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <math.h>
 
 #include "common.h"
+
+void exit_error(int fd, struct addrinfo *res) {
+    freeaddrinfo(res);
+    close(fd); 
+    exit(1);
+}
 
 int is_port_no(char* ASport) {
     return 0 < atoi(ASport) && atoi(ASport) <= 99999;
@@ -113,4 +120,68 @@ int is_time(char *word) {
         return 0;
 
     return 1;
+}
+
+int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
+    int written = 0, bytes_read = 0, n;
+    char data[BUFFER_DEFAULT] = "";
+    memset(data, 0, 128);
+
+    while (written < size) {
+        bytes_read = read(fd, data, 128);
+        if (bytes_read == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: data read from socket failed\n");
+            exit_error(fd, res);
+        }
+
+        if (bytes_read == size + 1 && data[bytes_read - 1] == '\n')
+            // doesn't write the \n char
+            bytes_read--;
+
+        n = fwrite(data, 1, bytes_read, fp);
+        if (n == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: copied data write to file failed\n");
+            exit_error(fd, res);
+        }
+        written += n;
+        memset(data, 0, 128);
+    }
+
+    if (!written)
+        return 0;
+    
+    return written - 1;
+}
+
+void send_asset(FILE *file_fd, int fd) {
+    char buffer[BUFFER_DEFAULT];
+
+    // write the rest of the message (data from the file)
+    int bytes_read = 0, n;
+    while ((bytes_read = fread(buffer, 1, 128, file_fd)) != 0) {
+        buffer[bytes_read] = '\0';
+        n = write(fd, buffer, bytes_read);
+        if (n == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: data write to socket failed\n");
+            exit(1);
+        }
+    }
+
+    // write terminator (\n)
+    n = write(fd, "\n", 1);
+    if (n == -1) { /*error*/ 
+        fprintf(stderr, "ERROR: terminator write failed\n");
+        exit(1);
+    }
+}
+
+int OoM(long number) {
+    int count = 0;
+
+    while(number != 0) {  
+       number = number / 10;  
+       count++;  
+    }  
+
+    return count;
 }
