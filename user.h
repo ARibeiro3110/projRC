@@ -14,7 +14,7 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
 int handle_login_response(char *status, char *buffer);
 
 /* Registers the user into the system or logs him in */
-int login(char *uid, char *password, char *ASIP, char *ASport);
+int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport);
 
 /* Handles logout server responses */
 int handle_logout_response(char *status, char *buffer);

@@ -181,17 +181,41 @@ int handle_login_response(char *status, char *buffer) {
     return 0;
 }
 
-int login(char *uid, char *password, char *ASIP, char *ASport) {     
+int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
+    char args[17] = "";
+
+    if (getchar() != ' ') {
+        fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
+        return 0;
+    }
+
+    fgets(args, 17, stdin);
+
+    if (strlen(args) < 16 || args[6] != ' ') {
+        fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
+        return 0;
+    }
+
+    else if (args[15] != '\n') {
+        while (getchar() != '\n'); // flush the rest of the input
+        fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
+        return 0;
+    }
+
+    sscanf(args, "%6s %8s", uid, password);
+
     long length_password = strlen(password), length_uid = strlen(uid);
     
     if (length_uid != 6 || length_password != 8 || !is_alphanumeric(password) 
         || !is_numeric(uid)) {
         fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
-        if (length_uid > 6 || length_password > 8)
-            while (getchar() != '\n');  // flushes the rest of the input
         return 0;
     }
 
+    if (logged_in) {
+        printf("WARNING: A user is already logged in. Please logout before logging in into another account.\n");
+        return 0;
+    }
     // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
     // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
     // (3 letters and one \0).
@@ -1101,19 +1125,8 @@ int main(int argc, char **argv) {
         scanf("%s", command);
 
         if (!strcmp(command, "login")) {
-            getchar();      // consumes the space
-            // read or flush the rest of the input if already logged in
-            fgets(args, 17, stdin);
-
-            if (logged_in)
-                printf("WARNING: A user is already logged in. Please logout before logging in into another account.\n");
-
-            else {
-                sscanf(args, " %6s %s", uid, password);
-            
-                if (login(uid, password, ASIP, ASport))
-                    logged_in = 1;                         // mark flag as logged in if login sucessful
-            }
+            if (login(logged_in, uid, password, ASIP, ASport))
+                logged_in = 1;
         }
 
         else if (!strcmp(command, "logout")) {
@@ -1137,31 +1150,39 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(command, "open")) {
-            char name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "", start_value[VALUE_SIZE] = "", 
-                 timeactive[SEC_SIZE] = "";
-            
-            getchar();      // consumes the space
-            // read or flush the rest of the input if already logged in
-            fgets(args, 54, stdin);
-            sscanf(args, "%s %s %s %s\n", name, asset_fname, start_value, timeactive);
+            if (getchar() != ' ') {
+                fprintf(stderr, "usage: open <name: up to 10 alphanumeric chars> <asset_fname: up to 24 alphanumeric chars (plus '-','_', '.') with file extension> <start_value: up to 6 digits> <timeactive: up to 5 digits>\n");
+            }
 
-            if (logged_in)
-                open_auction(uid, password, name, asset_fname, start_value, timeactive, ASIP, ASport);
+            else {
+                char name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "", start_value[VALUE_SIZE] = "", 
+                     timeactive[SEC_SIZE] = "";
+                fgets(args, 54, stdin);
+                sscanf(args, "%s %s %s %s\n", name, asset_fname, start_value, timeactive);
 
-            else
-                printf("WARNING: No user is logged in. Please log in before requesting auction opening.\n");   
+                if (logged_in)
+                    open_auction(uid, password, name, asset_fname, start_value, timeactive, ASIP, ASport);
+
+                else
+                    printf("WARNING: No user is logged in. Please log in before requesting auction opening.\n");   
+            }
         }
 
         else if (!strcmp(command, "close")) {
-            getchar();               // consumes the space
-            fgets(aid, 5, stdin);   
+            if (getchar() != ' ') {
+                fprintf(stderr, "usage: close <AID: 3 digits>\n");
+            }
 
-            if (logged_in)
-                close_auction(uid, password, aid, ASIP, ASport);
-            
-            else
-                printf("WARNING: No user is logged in. Please log in before requesting auction closure.\n");  
-        }       
+            else {
+                fgets(aid, 5, stdin);
+
+                if (logged_in)
+                    close_auction(uid, password, aid, ASIP, ASport);
+                
+                else
+                    printf("WARNING: No user is logged in. Please log in before requesting auction closure.\n");
+            }
+        }
 
         else if (!strcmp(command, "myauctions") || !strcmp(command, "ma")) {
             if (logged_in)
@@ -1182,27 +1203,42 @@ int main(int argc, char **argv) {
             list(ASIP, ASport);
 
         else if (!strcmp(command, "show_asset") || !strcmp(command, "sa")) {
-            getchar();               // consumes the space
-            fgets(aid, 5, stdin);
-            show_asset(aid, ASIP, ASport);
+            if (getchar() != ' ') {
+                fprintf(stderr, "usage: show_asset <AID: 3 digits>\n\t\bor sa <AID: 3 digits>\n");
+            }
+            
+            else {
+                fgets(aid, 5, stdin);
+                show_asset(aid, ASIP, ASport);
+            }
         }
 
         else if (!strcmp(command, "bid") || !strcmp(command, "b"))
             if (logged_in) {
-                char value[VALUE_SIZE];
-                getchar();               // consumes the space
-                fgets(args, 12, stdin);
-                sscanf(args, "%3s %s\n", aid, value);
-                bid(uid, password, aid, value, ASIP, ASport);
+                if (getchar() != ' ') {
+                    fprintf(stderr, "usage: bid <AID: 3 digits> <value: up to 6 digits>\n");
+                }
+                
+                else {
+                    char value[VALUE_SIZE];
+                    fgets(args, 12, stdin);
+                    sscanf(args, "%3s %s\n", aid, value);
+                    bid(uid, password, aid, value, ASIP, ASport);
+                }
             }
 
             else
                 printf("WARNING: No user is logged in. Please log in before requesting bid.\n"); 
 
         else if (!strcmp(command, "show_record") || !strcmp(command, "sr")) {
-            getchar();               // consumes the space
-            fgets(aid, 5, stdin);
-            show_record(aid, ASIP, ASport);
+            if (getchar() != ' ') {
+                fprintf(stderr, "usage: show_record <AID: 3 digits>\n\t\bor sr <AID: 3 digits>\n");
+            }
+            
+            else {
+                fgets(aid, 5, stdin);
+                show_record(aid, ASIP, ASport);
+            }
         }
 
         else if (!strcmp(command, "exit")) {
