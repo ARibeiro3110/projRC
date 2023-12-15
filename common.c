@@ -133,10 +133,10 @@ int is_time(char *word) {
 int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
     int written = 0, bytes_read = 0, n;
     char data[BUFFER_DEFAULT] = "";
-    memset(data, 0, 128);
+    memset(data, 0, BUFFER_DEFAULT);
 
     while (written < size) {
-        bytes_read = read(fd, data, 128);
+        bytes_read = read(fd, data, BUFFER_DEFAULT);
         written += bytes_read;
         if (bytes_read == -1) { /*error*/ 
             fprintf(stderr, "ERROR: data read from socket failed\n");
@@ -152,7 +152,7 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
             fprintf(stderr, "ERROR: copied data write to file failed\n");
             exit_error(fd, res);
         }
-        memset(data, 0, 128);
+        memset(data, 0, BUFFER_DEFAULT);
     }
 
     return written;
@@ -191,11 +191,11 @@ int OoM(long number) {
     return count;
 }
 
-void read_tcp_socket(int fd, struct addrinfo *res, char *buffer) {
-    memset(buffer, 0, 128);
+void read_tcp_socket(int fd, struct addrinfo *res, char *buffer, int size) {
+    memset(buffer, 0, size);
     
     int bytes_read = 0, n;
-    while ((n = read(fd, &buffer[bytes_read], 12)) != 0) {
+    while ((n = read(fd, &buffer[bytes_read], size)) != 0) {
         if (n == -1) { /*error*/ 
             fprintf(stderr, "ERROR: read failed\n");
             exit_error(fd, res);

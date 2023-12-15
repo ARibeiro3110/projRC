@@ -9,9 +9,31 @@
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "common.h"
 #include "user.h"
+
+// GLOBAL VARIABLE: used to prevent the user from shutting the app without logging out
+int logged_in = 0;
+
+void sigint_detected(int sig) {
+    // In some systems, after the handler call the signal gets reverted
+    // to SIG_DFL (the default action associated with the signal).
+    // So we set the signal handler back to our function after each trap.
+
+    if (sig == SIGINT) {
+        if (signal(SIGINT, sigint_detected) != SIG_ERR) {
+            if (logged_in)
+                write(0, "\nWARNING: Please log out before exiting.\n> ", 44);
+            else {
+                printf("\nSIGINT DETECTED, SHUTTING DOWN...\n");
+                exit(0);
+            }
+        }
+        return;
+    }
+}
 
 void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     switch (argc) {
@@ -362,10 +384,13 @@ void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP
         exit_error(fd, res);
     }
     
-    n = write(fd, message, strlen(message));
-    if (n == -1) { /*error*/ 
-        fprintf(stderr, "ERROR: message write failed\n");
-        exit_error(fd, res);
+    int bytes_written = 0;
+    while ((n = write(fd, &message[bytes_written], strlen(&message[bytes_written]))) != 0) {
+        if (n == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: message write failed\n");
+            exit_error(fd, res);
+        }
+        bytes_written += n;
     }
 }
 
@@ -423,7 +448,7 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
         connsend_tcp_socket(message, fd, res, ASIP, ASport);
         send_asset(file_fd, fd);
-        read_tcp_socket(fd, res, buffer);
+        read_tcp_socket(fd, res, buffer, 12);
 
         char status[STATUS_SIZE], aid[AID_SIZE];
         sscanf(buffer, "ROA %3s %s\n", status, aid);
@@ -505,7 +530,7 @@ void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASpor
     sprintf(message, "CLS %s %s %s\n", uid, password, aid);
 
     connsend_tcp_socket(message, fd, res, ASIP, ASport);
-    read_tcp_socket(fd, res, buffer);
+    read_tcp_socket(fd, res, buffer, 9);
 
     char status[STATUS_SIZE];
     sscanf(buffer, "RCL %s\n", status);
@@ -901,14 +926,7 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
 
     char response[RBD_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     int n, bytes_read = 0;
-    while ((n = read(fd, response, 8)) != 0) {
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: bid read failed\n");
-            exit_error(fd, res);
-        }
-        bytes_read += n;
-    }
-    response[bytes_read] = '\0';
+    read_tcp_socket(fd, NULL, response, 9);
 
     sscanf(response, "RBD %3s", status);
     handle_bid_response(status, aid, response);
@@ -1106,8 +1124,9 @@ int main(int argc, char **argv) {
     char ASIP[ASIP_SIZE] = "", ASport[ASPORT_SIZE] = "";
     handle_main_arguments(argc, argv, ASIP, ASport);
 
-    int logged_in = 0;
     char command[COMMAND_SIZE] = "", args[MAX_ARGS] = "", uid[UID_SIZE] = "", password[PASSWORD_SIZE] = "", aid[AID_SIZE + 1] = "";
+
+    signal(SIGINT, sigint_detected);
 
     printf("Input your command:\n");
 

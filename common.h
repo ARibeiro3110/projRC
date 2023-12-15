@@ -71,6 +71,6 @@ void send_asset(FILE *file_fd, int fd);
 /* Calculates the order of magnitude of a number */
 int OoM(long number);
 
-void read_tcp_socket(int fd, struct addrinfo *res, char *buffer);
+void read_tcp_socket(int fd, struct addrinfo *res, char *buffer, int size);
 
 #endif

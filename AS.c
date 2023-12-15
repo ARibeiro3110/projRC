@@ -13,9 +13,28 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <time.h>
+#include <signal.h>
 
 #include "common.h"
 #include "AS.h" 
+
+// GLOBAL VARIABLES: used to close the server graciously
+int fd_udp, fd_tcp;
+
+void sigint_detected(int sig) {
+    // In some systems, after the handler call the signal gets reverted
+    // to SIG_DFL (the default action associated with the signal).
+    // So we set the signal handler back to our function after each trap.
+
+    if (sig == SIGINT) {
+        if (signal(SIGINT, sigint_detected) != SIG_ERR) {
+            close(fd_udp);
+            close(fd_tcp);
+            write(0, "\nSIGINT DETECTED, SHUTTING DOWN...\n", 36);
+            exit(0);
+        }
+    }
+}
 
 void handle_main_arguments(int argc, char **argv, char *ASport, int *verbose) {
     switch (argc) {
@@ -293,7 +312,7 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
                 printf("UID=%s: login request; new user, registered in database\n\n", uid);
         }
     }
-
+    
     send_udp_response(response, fd, addr);
 }
 
@@ -981,21 +1000,33 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
 }
 
 void send_tcp_response(char *response, int fd) {
-    int n = write(fd, response, strlen(response));
-    if (n == -1) exit(1);
+    int n, sum = 0;
+    while (sum != strlen(response)) {
+        n = write(fd, response, strlen(response));
+        if (n == -1) exit(1);
+        sum += n;
+    }
 }
 
 void send_tcp_response_ERR(char *prefix, int fd, int verbose) {
     char response[9];
     sprintf(response, "%s ERR\n", prefix);
 
-    int n = write(fd, response, 8);
-    if (n == -1) exit(1);
+    int n, sum = 0;
+    while (sum != strlen(response)) {
+        n = write(fd, response, strlen(response));
+        if (n == -1) exit(1);
+        sum += n;
+    }
 }
 
 void send_tcp_ERR(int fd, int verbose) {
-    int n = write(fd, "ERR\n", 4);
-    if (n == -1) exit(1);
+    int n, sum = 0;
+    while (sum != 4) {
+        n = write(fd, "ERR\n", 4);
+        if (n == -1) exit(1);
+        sum += n;
+    }
 
     if (verbose)
         printf("Unexpected protocol message. ERR sent to client\n\n");
@@ -1665,14 +1696,8 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
     send_tcp_response(response, newfd);
 }
 
-void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
+void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
     char buffer[OPA_MESSAGE_SIZE] = "", message_type[MESSAGE_TYPE_SIZE] = "";
-    
-    socklen_t addrlen = sizeof(addr_tcp);
-    int newfd, n;
-
-    if ((newfd = accept(fd_tcp, (struct sockaddr *) &addr_tcp, &addrlen)) == -1)
-        exit(1);
 
     if (verbose)
         printf("REQUEST BY: %s - PORT No: %d\n", inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
@@ -1681,12 +1706,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     timeout_tcp.tv_sec = 5;  // 5 seconds timeout
     timeout_tcp.tv_usec = 0;
 
-    if (setsockopt(newfd, SOL_SOCKET, SO_RCVTIMEO, &timeout_tcp, sizeof(timeout_tcp)) < 0) {
-        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        close(newfd);
-    }
-
-    n = read(newfd, buffer, MESSAGE_TYPE_SIZE);
+    int n = read(newfd, buffer, MESSAGE_TYPE_SIZE);
     if (n == -1) exit(1);
     sscanf(buffer, "%3s", message_type);
 
@@ -1735,12 +1755,11 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     else if (!strcmp(message_type, "CLS")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE];
 
-        // read_from_tcp(newfd, &buffer[4], 20);
+        read_tcp_socket(newfd, NULL, &buffer[4], 21);
         sscanf(&buffer[4], "%s %s %s", uid, password, aid);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != ' '
-            || buffer[23] != '\n'
-            || strlen(buffer) - 17 != 7)
+            || buffer[23] != '\n' || strlen(buffer) - 17 != 7)
             send_tcp_ERR(newfd, verbose);
         
         else
@@ -1750,7 +1769,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     else if (!strcmp(message_type, "SAS")) {
         char aid[AID_SIZE];
         
-        //read_from_tcp(newfd, &buffer[4], 4);
+        read_tcp_socket(newfd, NULL, &buffer[4], 5);
         sscanf(&buffer[4], "%s", aid);
 
         if (buffer[3] != ' ' || buffer[7] != '\n' || strlen(buffer) - 3 != 5)
@@ -1763,7 +1782,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     else if (!strcmp(message_type, "BID")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE], value[VALUE_SIZE];
 
-       // read_from_tcp(newfd, &buffer[4], 28);
+        read_tcp_socket(newfd, NULL, &buffer[4], 28);
         sscanf(&buffer[4], "%s %s %s %s", uid, password, aid, value);
 
         int value_size = strlen(value);
@@ -1778,9 +1797,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     }
 
     else
-        send_tcp_ERR(fd_tcp, verbose);
-
-    close(newfd);
+        send_tcp_ERR(newfd, verbose);
 }
 
 int main(int argc, char **argv) {
@@ -1790,24 +1807,14 @@ int main(int argc, char **argv) {
     handle_main_arguments(argc, argv, ASport, &verbose);
     setup_environment();
 
-    int fd_udp, fd_tcp, errcode, out_fds;
+    int errcode, out_fds;
     ssize_t n;
-    struct addrinfo hints_udp, *res_udp, hints_tcp, *res_tcp;
+    struct addrinfo hints_udp, hints_tcp, *res_udp, *res_tcp;
     struct sockaddr_in addr_udp, addr_tcp;
 
     // UDP socket
     fd_udp = socket(AF_INET, SOCK_DGRAM, 0); 
     if (fd_udp == -1) /*error*/ exit(1);
-
-    struct timeval timeout_udp;
-    timeout_udp.tv_sec = 5;  // 5 seconds timeout
-    timeout_udp.tv_usec = 0;
-
-    if (setsockopt(fd_udp, SOL_SOCKET, SO_RCVTIMEO, &timeout_udp, sizeof(timeout_udp)) < 0) {
-        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        freeaddrinfo(res_udp);
-        close(fd_udp);
-    }
 
     memset(&hints_udp, 0, sizeof hints_udp);
     hints_udp.ai_family = AF_INET; 
@@ -1835,49 +1842,60 @@ int main(int argc, char **argv) {
     n = bind(fd_tcp, res_tcp->ai_addr, res_tcp->ai_addrlen);
     if (n == -1) /*error*/ exit(1);
 
-    if (listen(fd_tcp, 5) == -1) /*error*/ exit(1);
+    pid_t p;
+    p = fork();
 
-    // init select
-    fd_set inputs, testfds;
-    FD_ZERO(&inputs);        // Clear input mask
-    FD_SET(0, &inputs);      // Set standard input channel on
-    FD_SET(fd_udp, &inputs); // Set UDP channel on
-    FD_SET(fd_tcp, &inputs); // Set TCP channel on
+    if (p < 0) {
+        perror("fork fail");
+        exit(1);
+    }
 
-	while (1) {
-        testfds = inputs; // Reload mask
-        out_fds = select(FD_SETSIZE, &testfds, (fd_set *) NULL, (fd_set *) NULL, (struct timeval *) NULL);
+    else if (p == 0) {
+        freeaddrinfo(res_tcp);
+        close(fd_tcp);
 
-        pid_t p;
+        while (1)
+            handle_udp_request(fd_udp, addr_udp, verbose);
+    }
 
-        switch (out_fds) {
-            case -1:
-                perror("ERROR: select");
+    else {  // p == child_pid
+        freeaddrinfo(res_udp);
+        close(fd_udp);
+
+        signal(SIGINT, sigint_detected);
+
+        if (listen(fd_tcp, 5) == -1) /*error*/ exit(1);
+
+        while (1) {
+            socklen_t addrlen = sizeof(addr_tcp);
+            int newfd;
+
+            if ((newfd = accept(fd_tcp, (struct sockaddr *) &addr_tcp, &addrlen)) == -1)
                 exit(1);
 
-            default:
-                p = fork();
+            struct timeval timeout_tcp;
+            timeout_tcp.tv_sec = 5;  // 5 seconds timeout
+            timeout_tcp.tv_usec = 0;
 
-                if (p < 0) {
-                    perror("fork fail");
-                    exit(1);
-                }
+            if (setsockopt(newfd, SOL_SOCKET, SO_RCVTIMEO, &timeout_tcp, sizeof(timeout_tcp)) < 0) {
+                fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+                close(newfd);
+            }
+            
+            pid_t p;
+            p = fork();
 
-                else if (p == 0) {
-                    if (FD_ISSET(fd_udp, &testfds))
-                        handle_udp_request(fd_udp, addr_udp, verbose);
+            if (p < 0) {
+                perror("fork fail");
+                exit(1);
+            }
 
-                    if (FD_ISSET(fd_tcp, &testfds))
-                        handle_tcp_request(fd_tcp, addr_tcp, verbose);
-                }
-        }
-	}
-
-    freeaddrinfo(res_udp);
-    close(fd_udp);
-
-    freeaddrinfo(res_tcp);
-    close(fd_tcp);
+            else if (p == 0) {
+                handle_tcp_request(newfd, addr_tcp, verbose);
+                close(newfd);
+            } 
+        }    
+    }
 
     return 0;
 }
