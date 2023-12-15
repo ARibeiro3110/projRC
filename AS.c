@@ -30,9 +30,9 @@ void sigint_detected(int sig) {
         if (signal(SIGINT, sigint_detected) != SIG_ERR) {
             close(fd_udp);
             close(fd_tcp);
-            write(0, "\nSIGINT DETECTED, SHUTTING DOWN...\n", 36);
+            write(0, "\nSIGINT DETECTED, SHUTTING DOWN PROCESS...\n", 36);
             exit(0);
-        }
+        }   
     }
 }
 
