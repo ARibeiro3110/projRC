@@ -13,17 +13,6 @@
 #include "common.h"
 #include "user.h"
 
-int is_ipv4(char *ASIP) {
-    int ip_numbers[4];
-
-    sscanf(ASIP, "%d.%d.%d.%d", &ip_numbers[0], &ip_numbers[1], &ip_numbers[2], &ip_numbers[3]);
-
-    for (int i = 0; i < 4; i++)
-        if (0 > ip_numbers[i] || ip_numbers[i] > 255)
-            return 0;
-    return 1;
-}
-
 void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     switch (argc) {
     case 1:          // all arguments are omitted
@@ -33,11 +22,6 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
 
     case 3:          // one of the arguments is omitted
         if (!strcmp(argv[1], "-n")) {
-            if (!is_ipv4(argv[2])) {
-                fprintf(stderr, "usage: ASIP needs to follow the IPv4 format\n");
-                exit(1);
-            }
-
             strcpy(ASIP, argv[2]);
             strcpy(ASport, DEFAULT_PORT);
         }
@@ -61,11 +45,6 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
 
     case 5:          // all arguments are present
         if (!strcmp(argv[1], "-n") && !strcmp(argv[3], "-p")) {
-            if (!is_ipv4(argv[2])) {
-                fprintf(stderr, "usage: ASIP needs to follow the IPv4 format\n");
-                exit(1);
-            }
-
             if (!is_port_no(argv[4])) {
                 fprintf(stderr, "usage: ASport needs to be a valid port number\n");
                 exit(1);
@@ -78,11 +57,6 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
         else if (!strcmp(argv[1], "-p") && !strcmp(argv[3], "-n")) {
             if (!is_port_no(argv[2])) {
                 fprintf(stderr, "usage: ASport needs to be a valid port number\n");
-                exit(1);
-            }
-
-            if (!is_ipv4(argv[4])) {
-                fprintf(stderr, "usage: ASIP needs to follow the IPv4 format\n");
                 exit(1);
             }
 

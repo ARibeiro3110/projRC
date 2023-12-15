@@ -137,12 +137,13 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
 
     while (written < size) {
         bytes_read = read(fd, data, 128);
+        written += bytes_read;
         if (bytes_read == -1) { /*error*/ 
             fprintf(stderr, "ERROR: data read from socket failed\n");
             exit_error(fd, res);
         }
 
-        if (bytes_read == size + 1 && data[bytes_read - 1] == '\n')
+        if (written == size + 1 && data[bytes_read - 1] == '\n')
             // doesn't write the \n char
             bytes_read--;
 
@@ -151,7 +152,6 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
             fprintf(stderr, "ERROR: copied data write to file failed\n");
             exit_error(fd, res);
         }
-        written += n;
         memset(data, 0, 128);
     }
 
