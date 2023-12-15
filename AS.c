@@ -856,7 +856,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
                asset_fname, start_value, start_date, start_time, timeactive);
 
         if (strlen(host_uid) != 6 || !is_numeric(host_uid) || strlen(auction_name) > 10 
-            || !is_alphanumeric(auction_name) || !is_filename(asset_fname) 
+            || !is_auction_name(auction_name) || !is_filename(asset_fname) 
             || strlen(start_value) > 6 || !is_numeric(start_value) 
             || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5 
             || !is_numeric(timeactive)) {
@@ -1498,8 +1498,7 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             
             int attemped_bid = atoi(value);
             int min_bid;
-            char uid2[UID_SIZE], name[NAME_SIZE], asset_fname[FILENAME_SIZE];
-            sscanf(buffer, "%s %s %s %d", uid2, name, asset_fname, &min_bid);
+            sscanf(buffer, "%*s %*s %*s %d", &min_bid);
             fclose(fp_start);
 
             if (attemped_bid > min_bid) {
@@ -1541,8 +1540,7 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             
             int attemped_bid = atoi(value);
             int min_bid;
-            char uid[UID_SIZE], name[NAME_SIZE], asset_fname[FILENAME_SIZE];
-            sscanf(buffer, "%s %s %s %d", uid, name, asset_fname, &min_bid);
+            sscanf(buffer, "%*s %*s %*s %d", &min_bid);
             fclose(fp_start);
 
             if (attemped_bid > min_bid) {
@@ -1567,7 +1565,7 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             sscanf(filelist[n_entries - 1]->d_name, "%d.txt", &highest_bid);
 
             if (attemped_bid > highest_bid) {
-                create_bid(++highest_bid, aid, uid);
+                create_bid(attemped_bid, aid, uid);
                 create_bidded(uid, aid);
                 sprintf(response, "RBD ACC\n");
                 
@@ -1590,7 +1588,6 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
         || !is_alphanumeric(user_password) || strlen(aid) != 3 || !is_numeric(aid)
         || strlen(value) > 6 || !is_numeric(value)) {
         send_tcp_response_ERR("RBD", newfd, verbose);
-        printf("MANDEI\n");
         return;
     }
     
@@ -1817,7 +1814,7 @@ int main(int argc, char **argv) {
     hints_udp.ai_socktype = SOCK_DGRAM; 
     hints_udp.ai_flags = AI_PASSIVE;
 
-    errcode = getaddrinfo("localhost", ASport, &hints_udp, &res_udp);
+    errcode = getaddrinfo(NULL, ASport, &hints_udp, &res_udp);
     if (errcode != 0) /*error*/ exit(1);
 
     n = bind(fd_udp, res_udp->ai_addr, res_udp->ai_addrlen);
@@ -1832,7 +1829,7 @@ int main(int argc, char **argv) {
     hints_tcp.ai_socktype = SOCK_STREAM;
     hints_tcp.ai_flags = AI_PASSIVE;
 
-    errcode = getaddrinfo("localhost", ASport, &hints_tcp, &res_tcp);
+    errcode = getaddrinfo(NULL, ASport, &hints_tcp, &res_tcp);
     if (errcode != 0) /*error*/ exit(1);
 
     n = bind(fd_tcp, res_tcp->ai_addr, res_tcp->ai_addrlen);
