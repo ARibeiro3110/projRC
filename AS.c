@@ -210,7 +210,7 @@ void send_udp_response(char *response, int fd, struct sockaddr_in addr) {
 }
 
 void handle_login_request(char *uid, char *user_password, int fd, struct sockaddr_in addr, int verbose) {
-    char response[9];
+    char response[14];
 
     if (strlen(uid) != 6 || !is_numeric(uid) || strlen(user_password) != 8 
         || !is_alphanumeric(user_password)) {
@@ -260,7 +260,12 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
                 exit(1);
             }
             
-            fread(file_password, 1, 8, fp);
+            int ret = fread(file_password, 1, 8, fp);
+            if (ret < 8) {
+                fprintf(stderr, "ERROR: pass file read failed\n");
+                return;
+            }
+
             file_password[8] = '\0';
             fclose(fp);
 
@@ -327,7 +332,12 @@ void handle_logout_request(char *uid, char *user_password, int fd, struct sockad
                 exit(1);
             }
             
-            fread(file_password, 1, 8, fp);
+            int ret = fread(file_password, 1, 8, fp);
+            if (ret < 8) {
+                fprintf(stderr, "ERROR: pass file read failed\n");
+                return;
+            }
+
             file_password[8] = '\0';
             fclose(fp);
 
@@ -891,7 +901,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
         sscanf(&buffer[4], "%s %s", uid, password);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != '\n' 
-            || buffer[20] != '\0')
+            || buffer[20] != '\0' || strlen(buffer) - 14 != 6)
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
         else 
@@ -903,7 +913,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
         sscanf(&buffer[4], "%s %s", uid, password);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != '\n' 
-            || buffer[20] != '\0')
+            || buffer[20] != '\0' || strlen(buffer) - 14 != 6)
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
         else 
@@ -915,7 +925,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
         sscanf(&buffer[4], "%s %s", uid, password);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != '\n'
-            || buffer[20] != '\0')
+            || buffer[20] != '\0' || strlen(buffer) - 14 != 6)
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
         else 
@@ -926,7 +936,8 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
         char uid[UID_SIZE];
         sscanf(&buffer[4], "%s", uid);
 
-        if (buffer[3] != ' ' || buffer[10] != '\n' || buffer[11] != '\0')
+        if (buffer[3] != ' ' || buffer[10] != '\n' || buffer[11] != '\0'
+            || strlen(buffer) - 6 != 5)
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
         else 
@@ -937,7 +948,8 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
         char uid[UID_SIZE];
         sscanf(&buffer[4], "%s", uid);
 
-        if (buffer[3] != ' ' || buffer[10] != '\n' || buffer[11] != '\0')
+        if (buffer[3] != ' ' || buffer[10] != '\n' || buffer[11] != '\0'
+           || strlen(buffer) - 6 != 5)
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
         else 
@@ -945,8 +957,6 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
     }
 
     else if (!strcmp(message_type, "LST")) {
-        printf("BUFFER ;%s;", buffer);
-
         if (strcmp(buffer, "LST\n"))
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
@@ -958,7 +968,8 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
         char aid[AID_SIZE];
         sscanf(&buffer[4], "%s", aid);
 
-        if (buffer[3] != ' ' || buffer[7] != '\n' || buffer[8] != '\0')
+        if (buffer[3] != ' ' || buffer[7] != '\n' || buffer[8] != '\0'
+            || strlen(buffer) - 3 != 5)
             send_udp_ERR(fd_udp, addr_udp, verbose);
 
         else 
@@ -1015,8 +1026,8 @@ void create_start(int aid, char *uid, char *name, char *asset_fname, char *start
     char buffer[96];    
     sprintf(buffer, "%s %s %s %s %s %s\n%ld", uid, name, asset_fname, start_value, timestr, timeactive, fulltime);
     
-    int n = fwrite(buffer, 1, strlen(buffer), fp);
-    if (n == -1) { /*error*/ 
+    int size = strlen(buffer), n = fwrite(buffer, 1, size, fp);
+    if (n < size) { /*error*/ 
         fprintf(stderr, "ERROR: copied data write to file failed\n");
         exit(1);
     }
@@ -1055,7 +1066,6 @@ int store_asset(int fd, int aid, char *asset_fname, long f_size) {
         exit(1);
     }
     
-    // TODO
     int ret = copy_from_socket_to_file(f_size, fd, NULL, fp);
     fclose(fp);
 
@@ -1086,7 +1096,7 @@ void handle_open_auction_request(int newfd, char *uid, char *password, char *nam
     
     if (strlen(uid) != 6 || !is_numeric(uid) || strlen(password) != 8 
         || !is_alphanumeric(password) || strlen(name) > 10 
-        || !is_alphanumeric(name) || !is_filename(asset_fname) 
+        || !is_auction_name(name) || !is_filename(asset_fname) 
         || strlen(start_value) > 6 || !is_numeric(start_value) 
         || strlen(timeactive) > 5 || !is_numeric(timeactive)) {
         send_tcp_response_ERR("ROA", newfd, verbose);
@@ -1186,6 +1196,10 @@ int create_close(char *end_file_path, char *start_file_path) {
 
     char buffer[96];
     fgets(buffer, 96, fp_start);  // read until \n
+
+    long timeactive;
+    sscanf(buffer, "%*s %*s %*s %*d %*s %*s %ld", &timeactive);
+
     fgets(buffer, 20, fp_start);  // read start_fulltime (long max 19 digits)
     buffer[strlen(buffer)] = '\0';
     fclose(fp_start);
@@ -1210,6 +1224,9 @@ int create_close(char *end_file_path, char *start_file_path) {
 
     fulltime -= fulltime_start;
 
+    if (fulltime > timeactive)  
+        fulltime = timeactive;
+
     fprintf(fp, "%s %ld", timestr, fulltime);
     fclose(fp);
 
@@ -1233,7 +1250,12 @@ void handle_close_auction_request(int newfd, char *uid, char *user_password, cha
             exit(1);
         }
         
-        fread(file_password, 1, 8, fp);
+        int ret = fread(file_password, 1, 8, fp);
+        if (ret < 8) {
+            fprintf(stderr, "ERROR: pass file read failed\n");
+            return;
+        }
+
         file_password[8] = '\0';
         fclose(fp);
 
@@ -1425,8 +1447,8 @@ void create_bid(int highest_bid, char *aid, char *uid) {
 
     sprintf(buffer, "%s %d %s %ld", uid, highest_bid, timestr, fulltime);
     
-    int n = fwrite(buffer, 1, strlen(buffer), fp);
-    if (n == -1) { /*error*/ 
+    int size = strlen(buffer), n = fwrite(buffer, 1, size, fp);
+    if (n < size) { /*error*/ 
         fprintf(stderr, "ERROR: copied data write to file failed\n");
         exit(1);
     }
@@ -1598,7 +1620,12 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
                 exit(1);
             }
             
-            fread(file_password, 1, 8, fp);
+            int ret = fread(file_password, 1, 8, fp);
+            if (ret < 8) {
+                fprintf(stderr, "ERROR: pass file read failed\n");
+                return;
+            }
+
             file_password[8] = '\0';
             fclose(fp);
 
@@ -1692,7 +1719,8 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
             || buffer[22 + name_size + start_value_size + timeactive_size] != ' '
             || buffer[23 + name_size + start_value_size + timeactive_size + asset_fname_size] != ' '
             || buffer[24 + name_size + start_value_size + timeactive_size + asset_fname_size + OoM(f_size)] != ' '
-        )
+            || strlen(buffer) - (14 + name_size + start_value_size + timeactive_size + asset_fname_size + OoM(f_size)) != 11
+        ) 
             send_tcp_ERR(newfd, verbose);
 
         else
@@ -1710,7 +1738,8 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
         sscanf(&buffer[4], "%s %s %s", uid, password, aid);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != ' '
-            || buffer[23] != '\n')
+            || buffer[23] != '\n'
+            || strlen(buffer) - 17 != 7)
             send_tcp_ERR(newfd, verbose);
         
         else
@@ -1727,7 +1756,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
         }
         sscanf(&buffer[4], "%s", aid);
 
-        if (buffer[3] != ' ' || buffer[7] != '\n')
+        if (buffer[3] != ' ' || buffer[7] != '\n' || strlen(buffer) - 3 != 5)
             send_tcp_ERR(newfd, verbose);
 
         else 
@@ -1747,7 +1776,8 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
         int value_size = strlen(value);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != ' '
-            || buffer[23] != ' ' || buffer[24 + value_size] != '\n') 
+            || buffer[23] != ' ' || buffer[24 + value_size] != '\n'
+            || strlen(buffer) - (17 + value_size) != 8) 
             send_tcp_ERR(newfd, verbose);
 
         else

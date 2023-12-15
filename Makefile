@@ -1,10 +1,10 @@
 CC = gcc
+TARGETS = user AS
 
-all:
-	$(CC) user.c common.c -o user
-	$(CC) AS.c common.c -o AS
-	$(CC) udpserver.c -o udpserver
-	$(CC) tcpserver.c -o tcpserver
+all: $(TARGETS)
+
+$(TARGETS): %: %.c
+	$(CC) common.c $^ -o $@
 
 clean:
-	rm user AS
+	rm -f $(TARGETS)

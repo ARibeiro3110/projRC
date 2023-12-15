@@ -50,6 +50,9 @@ int is_numeric(char *word);
 /* Returns 1 if the string is only composed of alphanumeric characters and 0 otherwise */
 int is_alphanumeric(char* word);
 
+/* Returns 1 if the string is an auction name and 0 otherwise */
+int is_auction_name(char *word);
+
 /* Returns 1 if the string represents a filename and 0 otherwise */
 int is_filename(char *word);
 

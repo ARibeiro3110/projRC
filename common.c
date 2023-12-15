@@ -39,6 +39,14 @@ int is_alphanumeric(char *word) {
     return 1;
 }
 
+int is_auction_name(char *word) {
+    int l = strlen(word);
+    for (int i = 0; i < l; i++)
+        if (word[i] != '-' && word[i] != '_' && !isalnum(word[i]))
+            return 0;
+    return 1;
+}
+
 int is_filename(char *word) {
     int l = strlen(word);
 
@@ -147,10 +155,7 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
         memset(data, 0, 128);
     }
 
-    if (!written)
-        return 0;
-    
-    return written - 1;
+    return written;
 }
 
 void send_asset(FILE *file_fd, int fd) {

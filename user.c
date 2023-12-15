@@ -152,18 +152,32 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     close(fd);
 }
 
+void read_user_input(char *args) {
+    char c;
+    int space_previous = 0, i = 0;
+    while ((c = getchar()) != '\n') {
+        if (space_previous && c != ' ') {
+            space_previous = 0;
+            if (i != 0)
+                args[i++] = ' ';
+            args[i++] = c;
+        }
+
+        else if (c == ' ')
+            space_previous = 1;
+
+        else
+            args[i++] = c;
+    }    
+    args[i] = '\0';
+}
+
 int handle_login_response(char *status, char *buffer) {
+    int status_size = strlen(status);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
- 
-    else if (buffer[3] != ' ')
-        fprintf(stderr, "Server message includes whitespaces other than ' '.\n");
 
-    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
-        printf("User logged in.\n");
-        return 1;
-    }
-    
     else if (!strcmp(status, "NOK") && buffer[7] == '\n') 
         printf("Password is incorrect. Log in failed. Please try again.\n");
     
@@ -174,6 +188,16 @@ int handle_login_response(char *status, char *buffer) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
+             || strlen(buffer) - status_size != 5 
+             || buffer[5 + status_size] != '\0')
+        fprintf(stderr, "Server message includes whitespaces other than ' '.\n");
+
+    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
+        printf("User logged in.\n");
+        return 1;
+    }
 
     else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -189,21 +213,14 @@ int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
         return 0;
     }
 
-    fgets(args, 17, stdin);
+    read_user_input(args);
 
-    if (strlen(args) < 16 || args[6] != ' ') {
-        fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
-        return 0;
-    }
-
-    else if (args[15] != '\n') {
-        while (getchar() != '\n'); // flush the rest of the input
+    if (args[6] != ' ') {
         fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
         return 0;
     }
 
     sscanf(args, "%6s %8s", uid, password);
-
     long length_password = strlen(password), length_uid = strlen(uid);
     
     if (length_uid != 6 || length_password != 8 || !is_alphanumeric(password) 
@@ -230,17 +247,11 @@ int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
 }
 
 int handle_logout_response(char *status, char *buffer) {
+    int status_size = strlen(status);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
-    
-    else if (buffer[3] != ' ') 
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-    
-    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
-        printf("User logged out.\n");
-        return 1;
-    }
-    
+
     else if (!strcmp(status, "NOK") && buffer[7] == '\n') 
         printf("User was not logged in. Logout failed.\n");
 
@@ -249,6 +260,16 @@ int handle_logout_response(char *status, char *buffer) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+    
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
+             || strlen(buffer) - status_size != 5 
+             || buffer[5 + status_size] != '\0')
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+    
+    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
+        printf("User logged out.\n");
+        return 1;
+    }
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -274,17 +295,11 @@ int logout(char *uid, char *password, char *ASIP, char *ASport) {
 }
 
 int handle_unregister_response(char *status, char *buffer) {
+    int status_size = strlen(status);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
-    
-    else if (buffer[3] != ' ')
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-    
-    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
-        printf("User unregistered.\n");
-        return 1;
-    }
-    
+
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User was not logged in. Unregistered failed.\n");
     
@@ -293,6 +308,16 @@ int handle_unregister_response(char *status, char *buffer) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+    
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
+             || strlen(buffer) - status_size != 5 
+             || buffer[5 + status_size] != '\0')
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+    
+    else if (!strcmp(status, "OK") && buffer[6] == '\n') {
+        printf("User unregistered.\n");
+        return 1;
+    }
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -318,6 +343,8 @@ int unregister(char *uid, char *password, char *ASIP, char *ASport) {
 }
 
 void handle_open_auction_response(char *status, char *aid, char *buffer) {
+    int status_size = strlen(status);
+    
     if (!strcmp(buffer, "ERR\n")) {
         printf("Unexpected protocol message.\n");
         return;
@@ -327,10 +354,18 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
         return;
     }
+
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
+        printf("Auction could not be started.\n");
     
-    else if (buffer[3] != ' ' || buffer[4 + strlen(status)] != ' ') {
-        printf(";%s;\n", buffer);
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+    else if (!strcmp(status, "NLG") && buffer[7] == '\n')
+        printf("User is not logged in.\n");
+    
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != ' ' 
+             || buffer[8 + status_size] != '\n'
+             || strlen(buffer) - (3 + status_size) != 6) {
+        printf("BUFFER ;%s;\n", buffer);
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
     
@@ -339,14 +374,8 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
         return;
     }
     
-    if (!strcmp(status, "OK") && buffer[10] == '\n')
+    else if (!strcmp(status, "OK") && buffer[10] == '\n')
         printf("Auction %s was started.\n", aid);
-    
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
-        printf("Auction could not be started.\n");
-    
-    else if (!strcmp(status, "NLG") && buffer[7] == '\n')
-        printf("User is not logged in.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -388,7 +417,7 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
     // verifications are not necessary for uid and password fields since the 
     // values for uid and password were previously verified
 
-    if (strlen(name) > 10 || !is_alphanumeric(name) || !is_filename(asset_fname) 
+    if (strlen(name) > 10 || !is_auction_name(name) || !is_filename(asset_fname) 
         || strlen(start_value) > 6 || !is_numeric(start_value) 
         || strlen(timeactive) > 5 || !is_numeric(timeactive)) {
         fprintf(stderr, "usage: open <name: up to 10 alphanumeric chars> <asset_fname: up to 24 alphanumeric chars (plus '-','_', '.') with file extension> <start_value: up to 6 digits> <timeactive: up to 5 digits>\n");
@@ -451,17 +480,11 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 }
 
 void handle_close_auction_response(char *status, char *aid, char *uid, char *buffer) {
+    int status_size = strlen(status);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
-    
-    else if (buffer[3] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-        return;
-    }
-    
-    else if (!strcmp(status, "OK") && buffer[6] == '\n')
-        printf("Auction %s was closed.\n", aid);
-    
+
     else if (!strcmp(status, "EAU") && buffer[7] == '\n')
         printf("Auction %s could not be found.\n", aid);
     
@@ -476,21 +499,21 @@ void handle_close_auction_response(char *status, char *aid, char *uid, char *buf
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+    
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
+             || strlen(buffer) - status_size != 5) {
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+        return;
+    }
+    
+    else if (!strcmp(status, "OK") && buffer[6] == '\n')
+        printf("Auction %s was closed.\n", aid);
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
 void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASport) {
-    if (aid[3] == '\n')
-        aid[3] = '\0';
-    else {
-        fprintf(stderr, "usage: close <AID: 3 digits>\n");
-        if (strlen(aid) > 3)
-            while (getchar() != '\n');  // flushes the rest of the input
-        return;
-    }
-
     if (strlen(aid) != 3 || !is_numeric(aid)) {
         fprintf(stderr, "usage: close <AID: 3 digits>\n");
         return;
@@ -545,7 +568,7 @@ void print_aid_state(char *auction_list) {
     for (int i = 0; auction_list[6*i] == ' '; i++) {
         sscanf(&auction_list[6*i + 1], "%3s %s", aid, state);
         if (auction_list[6*i + 4] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
             return;
         }
 
@@ -566,18 +589,17 @@ void print_aid_state(char *auction_list) {
 }
 
 void handle_myauctions_response(char *status, char *buffer, char *auction_list) {
+    int status_size = strlen(status), auction_list_size = strlen(auction_list);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
     
-    else if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+    else if (buffer[3] != ' ' || (auction_list_size != 0 && auction_list[0] != ' ')
+             || strlen(buffer) - (status_size + auction_list_size) != 5
+             || buffer[4 + status_size + auction_list_size] != '\n'
+             || buffer[5 + status_size + auction_list_size] != '\0') {
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
-    }
-    
-    else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
-        printf("List of user's auctions: ");
-        print_aid_state(auction_list);
-        printf("\n");
     }
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
@@ -588,6 +610,12 @@ void handle_myauctions_response(char *status, char *buffer, char *auction_list) 
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(status, "OK") && buffer[6 + auction_list_size] == '\n') {
+        printf("List of user's auctions: ");
+        print_aid_state(auction_list);
+        printf("\n");
+    }
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -622,19 +650,10 @@ void myauctions(char *uid, char *ASIP, char *ASport) {
 }
 
 void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
+    int status_size = strlen(status), auction_list_size = strlen(auction_list);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
-    
-    else if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-        return;
-    }
-    
-    else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
-        printf("List of user's bids: ");
-        print_aid_state(auction_list);
-        printf("\n");
-    }
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User has no bids.\n");
@@ -644,6 +663,20 @@ void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+    
+    else if (buffer[3] != ' ' || (auction_list_size != 0 && auction_list[0] != ' ')
+             || strlen(buffer) - (status_size + auction_list_size) != 5
+             || buffer[4 + status_size + auction_list_size] != '\n'
+             || buffer[5 + status_size + auction_list_size] != '\0') {
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+        return;
+    }
+    
+    else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
+        printf("List of user's bids: ");
+        print_aid_state(auction_list);
+        printf("\n");
+    }
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -678,11 +711,22 @@ void mybids(char *uid, char *ASIP, char *ASport) {
 }
 
 void handle_list_response(char *status, char *buffer, char *auction_list) {
+    int status_size = strlen(status), auction_list_size = strlen(auction_list);
+    
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
+
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
+        printf("No auction was yet started.\n");
+
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
     
-    else if (buffer[3] != ' ' || (strlen(auction_list) != 0 && auction_list[0] != ' ')) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+    else if (buffer[3] != ' ' || (auction_list_size != 0 && auction_list[0] != ' ')
+             || strlen(buffer) - (status_size + auction_list_size) != 5
+             || buffer[4 + status_size + auction_list_size] != '\n'
+             || buffer[5 + status_size + auction_list_size] != '\0') {
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
     
@@ -696,12 +740,6 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
         print_aid_state(auction_list);
         printf("\n");
     }
-
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
-        printf("No auction was yet started.\n");
-
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
-        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -757,15 +795,6 @@ void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, 
 }
 
 void show_asset(char *aid, char *ASIP, char *ASport) {
-    if (aid[3] == '\n')
-        aid[3] = '\0';
-    else {
-        fprintf(stderr, "usage: show_asset <AID: 3 digits>\n\t\bor sa <AID: 3 digits>\n");
-        if (strlen(aid) > 3)
-            while (getchar() != '\n');  // flushes the rest of the input
-        return;
-    }
-
     if (strlen(aid) != 3 || !is_numeric(aid)) {
         fprintf(stderr, "usage: show_asset <AID: 3 digits>\n\t\bor sa <AID: 3 digits>\n");
         return;
@@ -822,7 +851,7 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
         
         bytes_read += n;
     }
-    prefix[bytes_read] = '\0';
+    prefix[bytes_read + 1] = '\0';
 
     sscanf(prefix, "RSA %s %s %s ", status, fname, fsize);
     long status_size = strlen(status), fname_size = strlen(fname), fsize_size = strlen(fsize);
@@ -830,7 +859,8 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     if (prefix[3] != ' ' || prefix[4 + status_size] != ' ' 
         || prefix[5 + status_size + fname_size] != ' ' 
         || prefix[6 + status_size + fname_size + fsize_size] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+        printf("PREFIX ;%s;", prefix);
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
 
@@ -844,16 +874,10 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 }
 
 void handle_bid_response(char *status, char *aid , char *response) {
+    int status_size = strlen(status);
+    
     if (!strcmp(response, "ERR\n"))
         printf("Unexpected protocol message.\n");
-    
-    else if (response[3] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
-        return;
-    }
-    
-    else if (!strcmp(status, "ACC")) 
-        printf("Your bid was accepted.\n");
 
     else if (!strcmp(status, "REF"))
         printf("Your bid was refused as a larger bid has already been placed.\n");
@@ -869,6 +893,15 @@ void handle_bid_response(char *status, char *aid , char *response) {
     
     else if (!strcmp(status, "ERR"))
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+    
+    else if (response[3] != ' ' || response[4 + status_size] != '\n' 
+             || strlen(response) - status_size != 5) {
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+        return;
+    }
+    
+    else if (!strcmp(status, "ACC")) 
+        printf("Your bid was accepted.\n");
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -928,22 +961,26 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
 }
 
 int verify_terminator(int bid, int closed, char *buffer, long auction_info_size, long bid_info_size, long closed_info_size) {
-    if (bid == 1 && closed == 1 && buffer[auction_info_size + bid_info_size + closed_info_size] != '\n') {
+    if (bid == 1 && closed == 1 && (buffer[auction_info_size + bid_info_size + closed_info_size] != '\n' 
+        || buffer[auction_info_size + bid_info_size + closed_info_size + 1] != '\0')) {
         fprintf(stderr, "ERROR: server sent message with bids and closure info but with no terminator\n");
         return 0;
     }
 
-    else if (bid == 0 && closed == 1 && buffer[auction_info_size + 1 + closed_info_size] != '\n') {
+    else if (bid == 0 && closed == 1 && (buffer[auction_info_size + 1 + closed_info_size] != '\n' 
+             || buffer[auction_info_size + 2 + closed_info_size] != '\n')) {
         fprintf(stderr, "ERROR: server sent message with closure info but with no terminator\n");
         return 0;
     }
 
-    else if (bid == 1 && closed == 0 && buffer[auction_info_size + bid_info_size - 1] != '\n') {
+    else if (bid == 1 && closed == 0 && (buffer[auction_info_size + bid_info_size - 1] != '\n' 
+             || buffer[auction_info_size + bid_info_size] != '\0')) {
         fprintf(stderr, "ERROR: server sent message with bids info but with no terminator\n");
         return 0;
     }
 
-    else if (bid == 0 && closed == 0 && buffer[auction_info_size] != '\n') {
+    else if (bid == 0 && closed == 0 && (buffer[auction_info_size] != '\n' 
+             || buffer[auction_info_size + 1] != '\0')) {
         fprintf(stderr, "ERROR: server sent message with no additional info and with no terminator\n");
         return 0;
     }
@@ -956,7 +993,7 @@ int handle_bids(char *bid_info) {
     int bid_info_length;
 
     if (bid_info[0] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return 0;
     }
     
@@ -967,7 +1004,7 @@ int handle_bids(char *bid_info) {
 
         if (bid_info[i + 2] != ' ' || bid_info[i + 9] != ' ' || bid_info[i + 10 + bid_value_size] != ' '
             || bid_info[i + 21 + bid_value_size] != ' ' || bid_info[i + 30 + bid_value_size] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
             return 0;
         }
 
@@ -991,7 +1028,7 @@ int handle_closed(char *closed_info) {
     sscanf(closed_info, "E %10s %8s %s\n", end_date, end_time, end_sec_time);
 
     if (closed_info[1] != ' ' || closed_info[12] != ' ' || closed_info[21] != ' ' ) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return 0;
     }
     
@@ -1007,15 +1044,6 @@ int handle_closed(char *closed_info) {
 }
 
 void show_record(char *aid, char *ASIP, char *ASport) {
-    if (aid[3] == '\n')
-        aid[3] = '\0';
-    else {
-        fprintf(stderr, "usage: show_record <AID: 3 digits>\n\t\bor sr <AID: 3 digits>\n");
-        if (strlen(aid) > 3)
-            while (getchar() != '\n');  // flushes the rest of the input
-        return;
-    }
-
     if (strlen(aid) != 3 || !is_numeric(aid)) {
         fprintf(stderr, "usage: show_record <AID: 3 digits>\n\t\bor sr <AID: 3 digits>\n");
         return;
@@ -1054,14 +1082,20 @@ void show_record(char *aid, char *ASIP, char *ASport) {
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
+        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
+
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
+        printf("Auction with AID %s does not exist.\n", aid);
+
     else if (buffer[3] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
 
     else if (!strcmp(status, "OK")) {
         long auction_name_size = strlen(auction_name), asset_fname_size = strlen(asset_fname),
-             start_value_size = strlen(start_value);
+             start_value_size = strlen(start_value), timeactive_size = strlen(timeactive);
 
         if (strlen(host_uid) != 6 || !is_numeric(host_uid) || auction_name_size > 10 
             || !is_alphanumeric(auction_name) || !is_filename(asset_fname) 
@@ -1069,6 +1103,12 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5 
             || !is_numeric(timeactive) || strlen(closed_info) > 27) {
             fprintf(stderr, "ERROR: server sent message in wrong format\n");
+            return;
+        }
+
+        if (strlen(buffer) - (26 + auction_name_size + asset_fname_size 
+            + start_value_size + timeactive_size + (strlen(bid_info) - 1) + strlen(closed_info)) != 12) {
+            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
             return;
         }
 
@@ -1084,7 +1124,7 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             || buffer[16 + auction_name_size + asset_fname_size + start_value_size] != ' '
             || buffer[27 + auction_name_size + asset_fname_size + start_value_size] != ' '
             || buffer[36 + auction_name_size + asset_fname_size + start_value_size] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' '.\n");
+            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
             return;
         }
         
@@ -1100,12 +1140,6 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             if (!handle_closed(closed_info))
                 return;
     }
-
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
-        printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
-        printf("Auction with AID %s does not exist.\n", aid);
 
     else 
         fprintf(stderr, "ERROR: server sent unknown message.\n");
@@ -1157,7 +1191,7 @@ int main(int argc, char **argv) {
             else {
                 char name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "", start_value[VALUE_SIZE] = "", 
                      timeactive[SEC_SIZE] = "";
-                fgets(args, 54, stdin);
+                read_user_input(args);
                 sscanf(args, "%s %s %s %s\n", name, asset_fname, start_value, timeactive);
 
                 if (logged_in)
@@ -1174,7 +1208,7 @@ int main(int argc, char **argv) {
             }
 
             else {
-                fgets(aid, 5, stdin);
+                read_user_input(aid);
 
                 if (logged_in)
                     close_auction(uid, password, aid, ASIP, ASport);
@@ -1208,7 +1242,7 @@ int main(int argc, char **argv) {
             }
             
             else {
-                fgets(aid, 5, stdin);
+                read_user_input(aid);
                 show_asset(aid, ASIP, ASport);
             }
         }
@@ -1221,7 +1255,7 @@ int main(int argc, char **argv) {
                 
                 else {
                     char value[VALUE_SIZE];
-                    fgets(args, 12, stdin);
+                    read_user_input(args);
                     sscanf(args, "%3s %s\n", aid, value);
                     bid(uid, password, aid, value, ASIP, ASport);
                 }
@@ -1236,7 +1270,7 @@ int main(int argc, char **argv) {
             }
             
             else {
-                fgets(aid, 5, stdin);
+                read_user_input(aid);
                 show_record(aid, ASIP, ASport);
             }
         }
