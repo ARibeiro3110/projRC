@@ -1679,10 +1679,18 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
 
     if (verbose)
         printf("REQUEST BY: %s - PORT No: %d\n", inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
+    
+    struct timeval timeout_tcp;
+    timeout_tcp.tv_sec = 5;  // 5 seconds timeout
+    timeout_tcp.tv_usec = 0;
+
+    if (setsockopt(newfd, SOL_SOCKET, SO_RCVTIMEO, &timeout_tcp, sizeof(timeout_tcp)) < 0) {
+        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+        close(newfd);
+    }
 
     n = read(newfd, buffer, MESSAGE_TYPE_SIZE);
     if (n == -1) exit(1);
-
     sscanf(buffer, "%3s", message_type);
 
     if (!strcmp(message_type, "OPA")) {
@@ -1730,11 +1738,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     else if (!strcmp(message_type, "CLS")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE];
 
-        n = read(newfd, &buffer[4], 20);
-        if (n == -1) {
-            fprintf(stderr, "ERROR: open message read failed\n");
-            return;
-        }
+        // read_from_tcp(newfd, &buffer[4], 20);
         sscanf(&buffer[4], "%s %s %s", uid, password, aid);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != ' '
@@ -1749,11 +1753,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     else if (!strcmp(message_type, "SAS")) {
         char aid[AID_SIZE];
         
-        n = read(newfd, &buffer[4], 4);
-        if (n == -1) {
-            fprintf(stderr, "ERROR: show_asset message read failed\n");
-            return;
-        }
+        //read_from_tcp(newfd, &buffer[4], 4);
         sscanf(&buffer[4], "%s", aid);
 
         if (buffer[3] != ' ' || buffer[7] != '\n' || strlen(buffer) - 3 != 5)
@@ -1766,11 +1766,7 @@ void handle_tcp_request(int fd_tcp, struct sockaddr_in addr_tcp, int verbose) {
     else if (!strcmp(message_type, "BID")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE], value[VALUE_SIZE];
 
-        n = read(newfd, &buffer[4], 28);
-        if (n == -1) {
-            fprintf(stderr, "ERROR: open message read failed\n");
-            return;
-        }
+       // read_from_tcp(newfd, &buffer[4], 28);
         sscanf(&buffer[4], "%s %s %s %s", uid, password, aid, value);
 
         int value_size = strlen(value);
@@ -1830,18 +1826,6 @@ int main(int argc, char **argv) {
     // TCP socket
     fd_tcp = socket(AF_INET, SOCK_STREAM, 0);
     if (fd_tcp == -1) exit(1);
-
-    struct timeval timeout_tcp;
-    timeout_tcp.tv_sec = 5;  // 5 seconds timeout
-    timeout_tcp.tv_usec = 0;
-
-    if (setsockopt(fd_udp, SOL_SOCKET, SO_RCVTIMEO, &timeout_tcp, sizeof(timeout_tcp)) < 0) {
-        fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        freeaddrinfo(res_udp);
-        close(fd_udp);
-        freeaddrinfo(res_tcp);
-        close(fd_tcp);
-    }
 
     memset(&hints_tcp, 0, sizeof hints_tcp);
     hints_tcp.ai_family = AF_INET;

@@ -190,3 +190,20 @@ int OoM(long number) {
 
     return count;
 }
+
+void read_tcp_socket(int fd, struct addrinfo *res, char *buffer) {
+    memset(buffer, 0, 128);
+    
+    int bytes_read = 0, n;
+    while ((n = read(fd, &buffer[bytes_read], 12)) != 0) {
+        if (n == -1) { /*error*/ 
+            fprintf(stderr, "ERROR: read failed\n");
+            exit_error(fd, res);
+        }
+        bytes_read += n;
+        
+        if (buffer[bytes_read - 1] == '\n')
+            break;
+    }
+    buffer[bytes_read] = '\0';
+}

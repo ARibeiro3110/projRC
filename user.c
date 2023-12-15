@@ -395,23 +395,6 @@ void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP
     }
 }
 
-void read_tcp_socket(int fd, struct addrinfo *res, char *buffer) {
-    memset(buffer, 0, 128);
-    
-    int bytes_read = 0, n;
-    while ((n = read(fd, &buffer[bytes_read], 12)) != 0) {
-        if (n == -1) { /*error*/ 
-            fprintf(stderr, "ERROR: read failed %d\n", errno);
-            exit_error(fd, res);
-        }
-        bytes_read += n;
-        
-        if (buffer[bytes_read - 1] == '\n')
-            break;
-    }
-    buffer[bytes_read] = '\0';
-}
-
 void open_auction(char *uid, char *password, char *name, char *asset_fname, 
                   char *start_value, char *timeactive, char *ASIP, char *ASport) {
     // verifications are not necessary for uid and password fields since the 

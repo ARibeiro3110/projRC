@@ -34,9 +34,6 @@ void handle_open_auction_response(char *status, char *aid, char *buffer);
 /* Connects to the server through tcp and sends the provided message */
 void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP, char *ASport);
 
-/* Reads the tcp socket in order to retrieve the server response */
-void read_tcp_socket(int fd, struct addrinfo *res, char *buffer);
-
 /* Transfers data from file to socket */
 void write_from_file_to_socket(int file_fd, char *buffer, int fd, struct addrinfo *res);
 
