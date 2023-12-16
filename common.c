@@ -15,7 +15,7 @@
 
 void exit_error(int fd, struct addrinfo *res) {
     freeaddrinfo(res);
-    close(fd); 
+    close(fd);
     exit(1);
 }
 
@@ -54,14 +54,14 @@ int is_filename(char *word) {
         return 0;
 
     for (int i = 0; i < l; i++) {
-        if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z' 
-              || 'a' <= word[i] <= 'z' || word[i] == '-' 
-              || word[i] == '_' || word[i] == '.')) 
+        if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z'
+              || 'a' <= word[i] <= 'z' || word[i] == '-'
+              || word[i] == '_' || word[i] == '.'))
             return 0;
-        
+
         if (i == l - 4 && word[i] != '.')
             return 0;
-        
+
         if (i > l - 4 && !('a' <= word[i] <= 'z' || '0' <= word[i] <= '9'))
             return 0;
     }
@@ -84,7 +84,7 @@ int is_date(char *word) {
     int year, month, day;
     sscanf(word, "%4d-%2d-%2d", &year, &month, &day);
 
-    if (year >= 0) 
+    if (year >= 0)
         if (1 <= month <=12) {
             if ((1 <= day <= 31) && (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12))
                 return 1;
@@ -138,7 +138,7 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
     while (written < size) {
         bytes_read = read(fd, data, BUFFER_DEFAULT);
         written += bytes_read;
-        if (bytes_read == -1) { /*error*/ 
+        if (bytes_read == -1) { /*error*/
             fprintf(stderr, "ERROR: data read from socket failed\n");
             exit_error(fd, res);
         }
@@ -148,7 +148,7 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
             bytes_read--;
 
         n = fwrite(data, 1, bytes_read, fp);
-        if (n == -1) { /*error*/ 
+        if (n == -1) { /*error*/
             fprintf(stderr, "ERROR: copied data write to file failed\n");
             exit_error(fd, res);
         }
@@ -166,7 +166,7 @@ void send_asset(FILE *file_fd, int fd) {
     while ((bytes_read = fread(buffer, 1, 128, file_fd)) != 0) {
         buffer[bytes_read] = '\0';
         n = write(fd, buffer, bytes_read);
-        if (n == -1) { /*error*/ 
+        if (n == -1) { /*error*/
             fprintf(stderr, "ERROR: data write to socket failed\n");
             exit(1);
         }
@@ -174,7 +174,7 @@ void send_asset(FILE *file_fd, int fd) {
 
     // write terminator (\n)
     n = write(fd, "\n", 1);
-    if (n == -1) { /*error*/ 
+    if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: terminator write failed\n");
         exit(1);
     }
@@ -183,25 +183,25 @@ void send_asset(FILE *file_fd, int fd) {
 int OoM(long number) {
     int count = 0;
 
-    while(number != 0) {  
-       number = number / 10;  
-       count++;  
-    }  
+    while(number != 0) {
+       number = number / 10;
+       count++;
+    }
 
     return count;
 }
 
 void read_tcp_socket(int fd, struct addrinfo *res, char *buffer, int size) {
     memset(buffer, 0, size);
-    
+
     int bytes_read = 0, n;
     while ((n = read(fd, &buffer[bytes_read], size)) != 0) {
-        if (n == -1) { /*error*/ 
+        if (n == -1) { /*error*/
             fprintf(stderr, "ERROR: read failed\n");
             exit_error(fd, res);
         }
         bytes_read += n;
-        
+
         if (buffer[bytes_read - 1] == '\n')
             break;
     }

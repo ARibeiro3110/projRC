@@ -38,7 +38,7 @@ void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP
 void write_from_file_to_socket(int file_fd, char *buffer, int fd, struct addrinfo *res);
 
 /* Opens an auction */
-void open_auction(char *uid, char *password, char *name, char *asset_fname, 
+void open_auction(char *uid, char *password, char *name, char *asset_fname,
                   char *start_value, char *timeactive, char *ASIP, char *ASport);
 
 /* Handles close_auction server responses */

@@ -38,7 +38,7 @@ void sigint_detected(int sig) {
 void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     switch (argc) {
     case 1:          // all arguments are omitted
-        strcpy(ASIP, DEFAULT_IP); 
+        strcpy(ASIP, DEFAULT_IP);
         strcpy(ASport, DEFAULT_PORT);
         break;
 
@@ -91,7 +91,7 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
             exit(1);
         }
         break;
-    
+
     default:
         fprintf(stderr, "usage: user [-n ASIP] [-p ASport]\n");
         exit(1);
@@ -105,7 +105,7 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
 
     // open UDP socket
     fd = socket(AF_INET, SOCK_DGRAM, 0); // UDP socket
-    if (fd == -1) {  /*error*/ 
+    if (fd == -1) {  /*error*/
         fprintf(stderr, "ERROR: socket creation was not sucessful\n");
         exit_error(fd, res);
     }
@@ -124,14 +124,14 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     }
 
     errcode = getaddrinfo(ASIP, ASport, &hints, &res);
-    if (errcode != 0) {  /*error*/ 
+    if (errcode != 0) {  /*error*/
         fprintf(stderr, "ERROR: server not found\n");
         exit_error(fd, res);
     }
 
     // Send message
     ssize_t n = sendto(fd, message, strlen(message), 0, res->ai_addr, res->ai_addrlen);
-    if (n == -1) { /*error*/ 
+    if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: UDP request failed\n");
         exit_error(fd, res);
     }
@@ -139,7 +139,7 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     // Receive response
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, buffer_size, 0, (struct sockaddr*) &addr, &addrlen);
-    if (n == -1) { /*error*/ 
+    if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: UDP response failed\n");
         exit_error(fd, res);
     }
@@ -164,19 +164,19 @@ void read_user_input(char *args) {
 
         else
             args[i++] = c;
-    }    
+    }
     args[i] = '\0';
 }
 
 int handle_login_response(char *status, char *buffer) {
     int status_size = strlen(status);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n') 
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("Password is incorrect. Log in failed. Please try again.\n");
-    
+
     else if (!strcmp(status, "REG") && buffer[7] == '\n') {
         printf("New user sucessfully created and logged in.\n");
         return 1;
@@ -185,8 +185,8 @@ int handle_login_response(char *status, char *buffer) {
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
-    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
-             || strlen(buffer) - status_size != 5 
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
+             || strlen(buffer) - status_size != 5
              || buffer[5 + status_size] != '\0')
         fprintf(stderr, "Server message includes whitespaces other than ' '.\n");
 
@@ -218,8 +218,8 @@ int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
 
     sscanf(args, "%6s %8s", uid, password);
     long length_password = strlen(password), length_uid = strlen(uid);
-    
-    if (length_uid != 6 || length_password != 8 || !is_alphanumeric(password) 
+
+    if (length_uid != 6 || length_password != 8 || !is_alphanumeric(password)
         || !is_numeric(uid)) {
         fprintf(stderr, "usage: login <UID: 6 digits> <password: 8 alphanumeric chars>\n");
         return 0;
@@ -229,10 +229,10 @@ int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
         printf("WARNING: A user is already logged in. Please logout before logging in into another account.\n");
         return 0;
     }
-    // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
-    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
+    // LIN message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2
+    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars
     // (3 letters and one \0).
-    char message[LIN_LOU_UNR_MESSAGE_SIZE] = "", 
+    char message[LIN_LOU_UNR_MESSAGE_SIZE] = "",
          buffer[RLI_RLO_RUR_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     sprintf(message, "LIN %s %s\n", uid, password);
 
@@ -244,43 +244,43 @@ int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
 
 int handle_logout_response(char *status, char *buffer) {
     int status_size = strlen(status);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
-    else if (!strcmp(status, "NOK") && buffer[7] == '\n') 
+    else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User was not logged in. Logout failed.\n");
 
     else if (!strcmp(status, "UNR") && buffer[7] == '\n')
         printf("User is not registered.\n");
 
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
-    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
-             || strlen(buffer) - status_size != 5 
+
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
+             || strlen(buffer) - status_size != 5
              || buffer[5 + status_size] != '\0')
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-    
+
     else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User logged out.\n");
         return 1;
     }
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 
     return 0;
 }
 
 int logout(char *uid, char *password, char *ASIP, char *ASport) {
-    // verifications are not necessary since the values for uid and password 
+    // verifications are not necessary since the values for uid and password
     // were previously verified
-    
-    // LOU message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
-    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
+
+    // LOU message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2
+    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars
     // (3 letters and one \0).
-    char message[LIN_LOU_UNR_MESSAGE_SIZE] = "", 
+    char message[LIN_LOU_UNR_MESSAGE_SIZE] = "",
          buffer[RLI_RLO_RUR_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     sprintf(message, "LOU %s %s\n", uid, password);
 
@@ -292,43 +292,43 @@ int logout(char *uid, char *password, char *ASIP, char *ASport) {
 
 int handle_unregister_response(char *status, char *buffer) {
     int status_size = strlen(status);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User was not logged in. Unregistered failed.\n");
-    
+
     else if (!strcmp(status, "UNR") && buffer[7] == '\n')
         printf("User is not registered.\n");
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
-    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
-             || strlen(buffer) - status_size != 5 
+
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
+             || strlen(buffer) - status_size != 5
              || buffer[5 + status_size] != '\0')
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-    
+
     else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User unregistered.\n");
         return 1;
     }
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
-    
+
     return 0;
 }
 
 int unregister(char *uid, char *password, char *ASIP, char *ASport) {
-    // verifications are not necessary since the values for uid and password 
+    // verifications are not necessary since the values for uid and password
     // were previously verified
-    
-    // UNR message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2 
-    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars 
-    // (3 letters and one \0). 
-    char message[LIN_LOU_UNR_MESSAGE_SIZE] = "", 
+
+    // UNR message always has 21 chars (3 for LIN, 6 for UID, 8 for password, 2
+    // for spaces, 1 for \n and 1 for \0). Status message has at most 4 chars
+    // (3 letters and one \0).
+    char message[LIN_LOU_UNR_MESSAGE_SIZE] = "",
          buffer[RLI_RLO_RUR_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     sprintf(message, "UNR %s %s\n", uid, password);
 
@@ -340,7 +340,7 @@ int unregister(char *uid, char *password, char *ASIP, char *ASport) {
 
 void handle_open_auction_response(char *status, char *aid, char *buffer) {
     int status_size = strlen(status);
-    
+
     if (!strcmp(buffer, "ERR\n")) {
         printf("Unexpected protocol message.\n");
         return;
@@ -353,40 +353,40 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("Auction could not be started.\n");
-    
+
     else if (!strcmp(status, "NLG") && buffer[7] == '\n')
         printf("User is not logged in.\n");
-    
-    else if (buffer[3] != ' ' || buffer[4 + status_size] != ' ' 
+
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != ' '
              || buffer[8 + status_size] != '\n'
              || strlen(buffer) - (3 + status_size) != 6) {
         printf("BUFFER ;%s;\n", buffer);
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
-    
+
     else if (!strcmp(status, "OK") && (strlen(aid) != 3 || !is_numeric(aid))) {
         fprintf(stderr, "ERROR: server sent message in wrong format\n");
         return;
     }
-    
+
     else if (!strcmp(status, "OK") && buffer[10] == '\n')
         printf("Auction %s was started.\n", aid);
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
 void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP, char *ASport) {
     int n = connect(fd, res->ai_addr, res->ai_addrlen);
-    if (n == -1) { /*error*/ 
+    if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: connect to server failed\n");
         exit_error(fd, res);
     }
-    
+
     int bytes_written = 0;
     while ((n = write(fd, &message[bytes_written], strlen(&message[bytes_written]))) != 0) {
-        if (n == -1) { /*error*/ 
+        if (n == -1) { /*error*/
             fprintf(stderr, "ERROR: message write failed\n");
             exit_error(fd, res);
         }
@@ -394,24 +394,24 @@ void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP
     }
 }
 
-void open_auction(char *uid, char *password, char *name, char *asset_fname, 
+void open_auction(char *uid, char *password, char *name, char *asset_fname,
                   char *start_value, char *timeactive, char *ASIP, char *ASport) {
-    // verifications are not necessary for uid and password fields since the 
+    // verifications are not necessary for uid and password fields since the
     // values for uid and password were previously verified
 
-    if (strlen(name) > 10 || !is_auction_name(name) || !is_filename(asset_fname) 
-        || strlen(start_value) > 6 || !is_numeric(start_value) 
+    if (strlen(name) > 10 || !is_auction_name(name) || !is_filename(asset_fname)
+        || strlen(start_value) > 6 || !is_numeric(start_value)
         || strlen(timeactive) > 5 || !is_numeric(timeactive)) {
         fprintf(stderr, "usage: open <name: up to 10 alphanumeric chars> <asset_fname: up to 24 alphanumeric chars (plus '-','_', '.') with file extension> <start_value: up to 6 digits> <timeactive: up to 5 digits>\n");
         return;
     }
-    
+
     // open tcp socket
     int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
     if (fd == -1) exit(1); //error
 
     struct addrinfo *res, hints;
-    
+
     struct timeval timeout;
     timeout.tv_sec = 5;  // 5 seconds timeout
     timeout.tv_usec = 0;
@@ -423,14 +423,14 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
-    hints.ai_socktype = SOCK_STREAM; //TCP socket   
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
-    if (errcode != 0) {  /*error*/ 
+    if (errcode != 0) {  /*error*/
         fprintf(stderr, "ERROR: server not found\n");
         exit_error(fd, res);
     }
-    
+
     char message[OPA_MESSAGE_SIZE] = "", buffer[BUFFER_DEFAULT] = "";
 
     FILE *file_fd = fopen(asset_fname, "r");
@@ -440,7 +440,7 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
     f_size = lseek(fileno(file_fd), 0, SEEK_END);
     lseek(fileno(file_fd), 0, SEEK_SET);   // reset pointer to beginning
 
-    if (f_size == 0) 
+    if (f_size == 0)
         printf("WARNING: %s file has no content\n", asset_fname);
 
     else {
@@ -458,40 +458,40 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
     fclose(file_fd);
     freeaddrinfo(res);
-    close(fd); 
+    close(fd);
 }
 
 void handle_close_auction_response(char *status, char *aid, char *uid, char *buffer) {
     int status_size = strlen(status);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
     else if (!strcmp(status, "EAU") && buffer[7] == '\n')
         printf("Auction %s could not be found.\n", aid);
-    
+
     else if (!strcmp(status, "NLG") && buffer[7] == '\n')
         printf("User is not logged in.\n");
-    
+
     else if (!strcmp(status, "EOW") && buffer[7] == '\n')
         printf("Auction %s is not owned by %s.\n", aid, uid);
-    
+
     else if (!strcmp(status, "END") && buffer[7] == '\n')
         printf("Auction %s has already finished.\n", aid);
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
-    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n' 
+
+    else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
              || strlen(buffer) - status_size != 5) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
-    
+
     else if (!strcmp(status, "OK") && buffer[6] == '\n')
         printf("Auction %s was closed.\n", aid);
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
@@ -500,7 +500,7 @@ void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASpor
         fprintf(stderr, "usage: close <AID: 3 digits>\n");
         return;
     }
-    
+
     // open tcp socket
     int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
     if (fd == -1) exit(1); //error
@@ -518,10 +518,10 @@ void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASpor
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
-    hints.ai_socktype = SOCK_STREAM; //TCP socket   
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
-    if (errcode != 0) {  /*error*/ 
+    if (errcode != 0) {  /*error*/
         fprintf(stderr, "ERROR: server not found\n");
         exit_error(fd, res);
     }
@@ -545,7 +545,7 @@ void print_aid_state(char *auction_list) {
     char aid[AID_SIZE], state[STATE_SIZE];
 
     // Each AID state pair has 6 chars (3 for AID, 1 for state and 1 for
-    // space). While the string is not finished, we traverse the string 6 by 
+    // space). While the string is not finished, we traverse the string 6 by
     // 6, extract the AID and the state from that section and print the section.
     for (int i = 0; auction_list[6*i] == ' '; i++) {
         sscanf(&auction_list[6*i + 1], "%3s %s", aid, state);
@@ -572,10 +572,10 @@ void print_aid_state(char *auction_list) {
 
 void handle_myauctions_response(char *status, char *buffer, char *auction_list) {
     int status_size = strlen(status), auction_list_size = strlen(auction_list);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
-    
+
     else if (buffer[3] != ' ' || (auction_list_size != 0 && auction_list[0] != ' ')
              || strlen(buffer) - (status_size + auction_list_size) != 5
              || buffer[4 + status_size + auction_list_size] != '\n'
@@ -586,7 +586,7 @@ void handle_myauctions_response(char *status, char *buffer, char *auction_list) 
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User has no ungoing auctions. Auctions listing failed.\n");
-    
+
     else if (!strcmp(status, "NLG") && buffer[7] == '\n')
         printf("User is not logged in.\n");
 
@@ -599,24 +599,24 @@ void handle_myauctions_response(char *status, char *buffer, char *auction_list) 
         printf("\n");
     }
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
 void myauctions(char *uid, char *ASIP, char *ASport) {
-    // verifications are not necessary since the value for uid and was 
+    // verifications are not necessary since the value for uid and was
     // previously verified
-    
-    // LMA message always has 12 chars (3 for LMA, 6 for UID, 1 for spaces, 1 
-    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and 
-    // one \0). Auction_list has at most 6001 chars (6 chars per auction * 1000 
-    // maximum auctions + 1 for for \0). Buffer has variable size, but at most 
-    // 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars per 
+
+    // LMA message always has 12 chars (3 for LMA, 6 for UID, 1 for spaces, 1
+    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
+    // one \0). Auction_list has at most 6001 chars (6 chars per auction * 1000
+    // maximum auctions + 1 for for \0). Buffer has variable size, but at most
+    // 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars per
     // auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
-    char message[LMA_LMB_MESSAGE_SIZE] = "", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "", 
+    char message[LMA_LMB_MESSAGE_SIZE] = "", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "",
         auction_list[MAX_AUCTION_LIST] = "";
-    
+
     sprintf(message, "LMA %s\n", uid);
 
     sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport);
@@ -633,19 +633,19 @@ void myauctions(char *uid, char *ASIP, char *ASport) {
 
 void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
     int status_size = strlen(status), auction_list_size = strlen(auction_list);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("User has no bids.\n");
-    
+
     else if (!strcmp(status, "NLG") && buffer[7] == '\n')
         printf("User is not logged in.\n");
 
     else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
+
     else if (buffer[3] != ' ' || (auction_list_size != 0 && auction_list[0] != ' ')
              || strlen(buffer) - (status_size + auction_list_size) != 5
              || buffer[4 + status_size + auction_list_size] != '\n'
@@ -653,31 +653,31 @@ void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
-    
+
     else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
         printf("List of user's bids: ");
         print_aid_state(auction_list);
         printf("\n");
     }
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
 void mybids(char *uid, char *ASIP, char *ASport) {
-    // verifications are not necessary since the value for uid and was 
+    // verifications are not necessary since the value for uid and was
     // previously verified
 
-    // LMB message always has 12 chars (3 for LMA, 6 for UID, 1 for spaces, 1 
-    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and 
-    // one \0). Auction_list has at most 6001 chars (6 chars per auction * 1000 
-    // maximum auctions + 1 for for \0). Buffer has variable size, but at most 
-    // 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars per 
+    // LMB message always has 12 chars (3 for LMA, 6 for UID, 1 for spaces, 1
+    // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
+    // one \0). Auction_list has at most 6001 chars (6 chars per auction * 1000
+    // maximum auctions + 1 for for \0). Buffer has variable size, but at most
+    // 6008 chars (3 for RMA + 1 for space + 2 for status + 6 chars per
     // auction * 1000 maximum auctions + 1 for \n + 1 for for \0)
 
-    char message[LMA_LMB_MESSAGE_SIZE] = "", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "", 
+    char message[LMA_LMB_MESSAGE_SIZE] = "", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "",
          auction_list[MAX_AUCTION_LIST] = "";
-    
+
     sprintf(message, "LMB %s\n", uid);
 
     sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport);
@@ -694,16 +694,16 @@ void mybids(char *uid, char *ASIP, char *ASport) {
 
 void handle_list_response(char *status, char *buffer, char *auction_list) {
     int status_size = strlen(status), auction_list_size = strlen(auction_list);
-    
+
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
         printf("No auction was yet started.\n");
 
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
+
     else if (buffer[3] != ' ' || (auction_list_size != 0 && auction_list[0] != ' ')
              || strlen(buffer) - (status_size + auction_list_size) != 5
              || buffer[4 + status_size + auction_list_size] != '\n'
@@ -711,7 +711,7 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
-    
+
     else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
         if (!strlen(auction_list)) {
             printf("No auctions are currently active.\n");
@@ -723,7 +723,7 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
         printf("\n");
     }
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
@@ -734,7 +734,7 @@ void list(char *ASIP, char *ASport) {
     // variable size, but at most 6008 chars (3 for RLS + 1 for space + 2 for
     // status + 6 chars per auction * 1000 maximum auctions + 1 for \n + 1 for \0)
 
-    char message[LST_MESSAGE_SIZE] = "LST\n", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "", 
+    char message[LST_MESSAGE_SIZE] = "LST\n", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "",
          auction_list[MAX_AUCTION_LIST] = "";
 
     sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport);
@@ -768,11 +768,11 @@ void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, 
 
     else if (!strcmp(status, "NOK"))
         printf("There is no file to be sent, or some problem occured.\n");
-    
+
     else if (!strcmp(status, "ERR"))
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
@@ -786,10 +786,10 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     if (fd == -1) exit(1); //error
 
     struct addrinfo *res, hints;
-    
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
-    hints.ai_socktype = SOCK_STREAM; //TCP socket   
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     struct timeval timeout;
     timeout.tv_sec = 5;  // 5 seconds timeout
@@ -801,7 +801,7 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     }
 
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
-    if (errcode != 0) {  /*error*/ 
+    if (errcode != 0) {  /*error*/
         fprintf(stderr, "ERROR: server not found\n");
         exit_error(fd, res);
     }
@@ -812,7 +812,7 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 
     int n, spaces = 0, bytes_read = 0;
     char prefix[RSA_PREFIX_SIZE], status[STATUS_SIZE], fname[FILENAME_SIZE] = "", fsize[FILESIZE_SIZE] = "";
-    
+
     for (int i = 0; i < RSA_PREFIX_SIZE; i++) {
         n = read(fd, &prefix[i], 1);
         if (n == -1) {
@@ -830,7 +830,7 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 
         if (spaces == 4)
             break;
-        
+
         bytes_read += n;
     }
     prefix[bytes_read + 1] = '\0';
@@ -838,8 +838,8 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     sscanf(prefix, "RSA %s %s %s ", status, fname, fsize);
     long status_size = strlen(status), fname_size = strlen(fname), fsize_size = strlen(fsize);
 
-    if (prefix[3] != ' ' || prefix[4 + status_size] != ' ' 
-        || prefix[5 + status_size + fname_size] != ' ' 
+    if (prefix[3] != ' ' || prefix[4 + status_size] != ' '
+        || prefix[5 + status_size + fname_size] != ' '
         || prefix[6 + status_size + fname_size + fsize_size] != ' ') {
         printf("PREFIX ;%s;", prefix);
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
@@ -857,13 +857,13 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 
 void handle_bid_response(char *status, char *aid , char *response) {
     int status_size = strlen(status);
-    
+
     if (!strcmp(response, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
     else if (!strcmp(status, "REF"))
         printf("Your bid was refused as a larger bid has already been placed.\n");
-    
+
     else if (!strcmp(status, "ILG"))
         printf("You cannot bid on an auction you are hosting.\n");
 
@@ -872,20 +872,20 @@ void handle_bid_response(char *status, char *aid , char *response) {
 
     else if (!strcmp(status, "NLG"))
         printf("User is not logged in.\n");
-    
+
     else if (!strcmp(status, "ERR"))
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
-    
-    else if (response[3] != ' ' || response[4 + status_size] != '\n' 
+
+    else if (response[3] != ' ' || response[4 + status_size] != '\n'
              || strlen(response) - status_size != 5) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return;
     }
-    
-    else if (!strcmp(status, "ACC")) 
+
+    else if (!strcmp(status, "ACC"))
         printf("Your bid was accepted.\n");
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
@@ -908,13 +908,13 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
         fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
         exit_error(fd, res);
     }
-    
+
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
-    hints.ai_socktype = SOCK_STREAM; //TCP socket   
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
-    if (errcode != 0) {  /*error*/ 
+    if (errcode != 0) {  /*error*/
         fprintf(stderr, "ERROR: server not found\n");
         exit_error(fd, res);
     }
@@ -936,25 +936,25 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
 }
 
 int verify_terminator(int bid, int closed, char *buffer, long auction_info_size, long bid_info_size, long closed_info_size) {
-    if (bid == 1 && closed == 1 && (buffer[auction_info_size + bid_info_size + closed_info_size] != '\n' 
+    if (bid == 1 && closed == 1 && (buffer[auction_info_size + bid_info_size + closed_info_size] != '\n'
         || buffer[auction_info_size + bid_info_size + closed_info_size + 1] != '\0')) {
         fprintf(stderr, "ERROR: server sent message with bids and closure info but with no terminator\n");
         return 0;
     }
 
-    else if (bid == 0 && closed == 1 && (buffer[auction_info_size + 1 + closed_info_size] != '\n' 
+    else if (bid == 0 && closed == 1 && (buffer[auction_info_size + 1 + closed_info_size] != '\n'
              || buffer[auction_info_size + 2 + closed_info_size] != '\n')) {
         fprintf(stderr, "ERROR: server sent message with closure info but with no terminator\n");
         return 0;
     }
 
-    else if (bid == 1 && closed == 0 && (buffer[auction_info_size + bid_info_size - 1] != '\n' 
+    else if (bid == 1 && closed == 0 && (buffer[auction_info_size + bid_info_size - 1] != '\n'
              || buffer[auction_info_size + bid_info_size] != '\0')) {
         fprintf(stderr, "ERROR: server sent message with bids info but with no terminator\n");
         return 0;
     }
 
-    else if (bid == 0 && closed == 0 && (buffer[auction_info_size] != '\n' 
+    else if (bid == 0 && closed == 0 && (buffer[auction_info_size] != '\n'
              || buffer[auction_info_size + 1] != '\0')) {
         fprintf(stderr, "ERROR: server sent message with no additional info and with no terminator\n");
         return 0;
@@ -963,15 +963,15 @@ int verify_terminator(int bid, int closed, char *buffer, long auction_info_size,
 }
 
 int handle_bids(char *bid_info) {
-    char bidder_uid[UID_SIZE] = "", bid_value[VALUE_SIZE] = "", bid_date[DATE_SIZE] = "", 
-         bid_time[TIME_SIZE] = "", bid_sec_time[SEC_SIZE] = ""; 
+    char bidder_uid[UID_SIZE] = "", bid_value[VALUE_SIZE] = "", bid_date[DATE_SIZE] = "",
+         bid_time[TIME_SIZE] = "", bid_sec_time[SEC_SIZE] = "";
     int bid_info_length;
 
     if (bid_info[0] != ' ') {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return 0;
     }
-    
+
     for (int i = 0; bid_info[i] == ' ' && strlen(&bid_info[i]) != 1; i += bid_info_length) {
         sscanf(&bid_info[i + 1], "B %6s %6s %10s %8s %s", bidder_uid, bid_value, bid_date, bid_time, bid_sec_time);
 
@@ -983,9 +983,9 @@ int handle_bids(char *bid_info) {
             return 0;
         }
 
-        if (strlen(bidder_uid) != 6 || !is_numeric(bidder_uid) 
-            || bid_value_size > 6 || !is_numeric(bid_value) 
-            || !is_date(bid_date) || !is_time(bid_time) 
+        if (strlen(bidder_uid) != 6 || !is_numeric(bidder_uid)
+            || bid_value_size > 6 || !is_numeric(bid_value)
+            || !is_date(bid_date) || !is_time(bid_time)
             || strlen(bid_sec_time) > 5 || !is_numeric(bid_sec_time)) {
             fprintf(stderr, "ERROR: server sent message in wrong bids format\n");
             return 0;
@@ -1006,8 +1006,8 @@ int handle_closed(char *closed_info) {
         fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
         return 0;
     }
-    
-    if (!is_date(end_date) || !is_time(end_time) 
+
+    if (!is_date(end_date) || !is_time(end_time)
         || strlen(end_sec_time) > 5 || !is_numeric(end_sec_time)) {
             fprintf(stderr, "ERROR: server sent message in wrong closure format\n");
             return 0;
@@ -1023,41 +1023,41 @@ void show_record(char *aid, char *ASIP, char *ASport) {
         fprintf(stderr, "usage: show_record <AID: 3 digits>\n\t\bor sr <AID: 3 digits>\n");
         return;
     }
-    
+
     // SRC message always has 9 chars (3 for SRC, 3 for AID, 1 for spaces, 1
     // for \n and 1 for \0). Status message has at most 4 chars (3 letters and
     // one \0). bid_info has at most 2102 chars ((1+1+6+1+6+1+10+1+8+1+5)*50 for
-    // the bids + 1 for initial \n + 1 for \0). closed_info has at most 28 chars 
-    // (27 for info + 1 for \0). buffer has at most 2213 chars (3 for RRC + 2 
-    // for status + 6 for host_uid + 10 for auction_name + 24 for asset_fname + 
-    // 6 for start_value + 10 for start_date + 8 for start_time + 5 for timeactive 
+    // the bids + 1 for initial \n + 1 for \0). closed_info has at most 28 chars
+    // (27 for info + 1 for \0). buffer has at most 2213 chars (3 for RRC + 2
+    // for status + 6 for host_uid + 10 for auction_name + 24 for asset_fname +
+    // 6 for start_value + 10 for start_date + 8 for start_time + 5 for timeactive
     // + 2102 from bid_info + 28 chars).
 
-    char message[SRC_MESSAGE_SIZE] = "", buffer[SRC_BUFFER_SIZE] = "", 
-         status[STATUS_SIZE] = "", host_uid[UID_SIZE] = "", 
-         auction_name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "", 
-         start_value[VALUE_SIZE] = "", start_date[DATE_SIZE] = "", 
-         start_time[TIME_SIZE] = "", timeactive[SEC_SIZE] = "", 
-         bid_info[BID_INFO_SIZE] = "", closed_info[CLOSED_INFO_SIZE] = ""; 
+    char message[SRC_MESSAGE_SIZE] = "", buffer[SRC_BUFFER_SIZE] = "",
+         status[STATUS_SIZE] = "", host_uid[UID_SIZE] = "",
+         auction_name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "",
+         start_value[VALUE_SIZE] = "", start_date[DATE_SIZE] = "",
+         start_time[TIME_SIZE] = "", timeactive[SEC_SIZE] = "",
+         bid_info[BID_INFO_SIZE] = "", closed_info[CLOSED_INFO_SIZE] = "";
     sprintf(message, "SRC %s\n", aid);
 
     sendrec_udp_socket(message, buffer, SRC_BUFFER_SIZE, ASIP, ASport);
-    
+
     // Using this format, bid_info will always have a \n at the beginning. If
-    // no bids were specified and if we used another format which matched the \n 
-    // at the end of the owner info, the %[^E] part of the string would read 
-    // nothing. In turn, this would prevent the closed_info to read any 
-    // information. On the contrary, if we keep the \n unmatched, %[^E] will 
+    // no bids were specified and if we used another format which matched the \n
+    // at the end of the owner info, the %[^E] part of the string would read
+    // nothing. In turn, this would prevent the closed_info to read any
+    // information. On the contrary, if we keep the \n unmatched, %[^E] will
     // always match at least with one character (\n), which allows closed_info
     // to read the rest of the string.
-    sscanf(buffer, "RRC %3s %6s %10s %24s %6s %10s %8s %5s%2101[^E]%[^\n]", 
-            status, host_uid, auction_name, asset_fname, start_value, 
+    sscanf(buffer, "RRC %3s %6s %10s %24s %6s %10s %8s %5s%2101[^E]%[^\n]",
+            status, host_uid, auction_name, asset_fname, start_value,
             start_date, start_time, timeactive, bid_info, closed_info);
 
     if (!strcmp(buffer, "ERR\n"))
         printf("Unexpected protocol message.\n");
 
-    else if (!strcmp(status, "ERR") && buffer[7] == '\n') 
+    else if (!strcmp(status, "ERR") && buffer[7] == '\n')
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
@@ -1072,16 +1072,16 @@ void show_record(char *aid, char *ASIP, char *ASport) {
         long auction_name_size = strlen(auction_name), asset_fname_size = strlen(asset_fname),
              start_value_size = strlen(start_value), timeactive_size = strlen(timeactive);
 
-        if (strlen(host_uid) != 6 || !is_numeric(host_uid) || auction_name_size > 10 
-            || !is_alphanumeric(auction_name) || !is_filename(asset_fname) 
-            || start_value_size > 6 || !is_numeric(start_value) 
-            || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5 
+        if (strlen(host_uid) != 6 || !is_numeric(host_uid) || auction_name_size > 10
+            || !is_alphanumeric(auction_name) || !is_filename(asset_fname)
+            || start_value_size > 6 || !is_numeric(start_value)
+            || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5
             || !is_numeric(timeactive) || strlen(closed_info) > 27) {
             fprintf(stderr, "ERROR: server sent message in wrong format\n");
             return;
         }
 
-        if (strlen(buffer) - (26 + auction_name_size + asset_fname_size 
+        if (strlen(buffer) - (26 + auction_name_size + asset_fname_size
             + start_value_size + timeactive_size + (strlen(bid_info) - 1) + strlen(closed_info)) != 12) {
             fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
             return;
@@ -1094,7 +1094,7 @@ void show_record(char *aid, char *ASIP, char *ASport) {
         if (!verify_terminator(bid, closed, buffer, auction_info_size, bid_info_size, closed_info_size))
             return;
 
-        if (buffer[6] != ' ' || buffer[13] != ' ' || buffer[14 + auction_name_size] != ' ' 
+        if (buffer[6] != ' ' || buffer[13] != ' ' || buffer[14 + auction_name_size] != ' '
             || buffer[15 + auction_name_size + asset_fname_size] != ' '
             || buffer[16 + auction_name_size + asset_fname_size + start_value_size] != ' '
             || buffer[27 + auction_name_size + asset_fname_size + start_value_size] != ' '
@@ -1102,21 +1102,21 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
             return;
         }
-        
-        printf("owner: %s, %s, %s, value=%s, %s %s, timeactive: %s\n", host_uid, 
-               auction_name, asset_fname, start_value, start_date, start_time, 
+
+        printf("owner: %s, %s, %s, value=%s, %s %s, timeactive: %s\n", host_uid,
+               auction_name, asset_fname, start_value, start_date, start_time,
                timeactive);
 
-        if (bid) 
+        if (bid)
             if (!handle_bids(bid_info))
                 return;
-        
-        if (closed) 
+
+        if (closed)
             if (!handle_closed(closed_info))
                 return;
     }
 
-    else 
+    else
         fprintf(stderr, "ERROR: server sent unknown message.\n");
 }
 
@@ -1144,7 +1144,7 @@ int main(int argc, char **argv) {
                 if (logout(uid, password, ASIP, ASport))
                     logged_in = 0;
             }
-            
+
             else
                 printf("WARNING: No user is logged in. Please log in before logging out.\n");
         }
@@ -1165,7 +1165,7 @@ int main(int argc, char **argv) {
             }
 
             else {
-                char name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "", start_value[VALUE_SIZE] = "", 
+                char name[NAME_SIZE] = "", asset_fname[FILENAME_SIZE] = "", start_value[VALUE_SIZE] = "",
                      timeactive[SEC_SIZE] = "";
                 read_user_input(args);
                 sscanf(args, "%s %s %s %s\n", name, asset_fname, start_value, timeactive);
@@ -1174,7 +1174,7 @@ int main(int argc, char **argv) {
                     open_auction(uid, password, name, asset_fname, start_value, timeactive, ASIP, ASport);
 
                 else
-                    printf("WARNING: No user is logged in. Please log in before requesting auction opening.\n");   
+                    printf("WARNING: No user is logged in. Please log in before requesting auction opening.\n");
             }
         }
 
@@ -1188,7 +1188,7 @@ int main(int argc, char **argv) {
 
                 if (logged_in)
                     close_auction(uid, password, aid, ASIP, ASport);
-                
+
                 else
                     printf("WARNING: No user is logged in. Please log in before requesting auction closure.\n");
             }
@@ -1199,7 +1199,7 @@ int main(int argc, char **argv) {
                 myauctions(uid, ASIP, ASport);
 
             else
-                printf("WARNING: No user is logged in. Please log in before requesting auction listing.\n");            
+                printf("WARNING: No user is logged in. Please log in before requesting auction listing.\n");
         }
 
         else if (!strcmp(command, "mybids") || !strcmp(command, "mb"))
@@ -1207,7 +1207,7 @@ int main(int argc, char **argv) {
                 mybids(uid, ASIP, ASport);
 
             else
-                printf("WARNING: No user is logged in. Please log in before requesting bid listing.\n"); 
+                printf("WARNING: No user is logged in. Please log in before requesting bid listing.\n");
 
         else if (!strcmp(command, "list") || !strcmp(command, "l"))
             list(ASIP, ASport);
@@ -1216,7 +1216,7 @@ int main(int argc, char **argv) {
             if (getchar() != ' ') {
                 fprintf(stderr, "usage: show_asset <AID: 3 digits>\n\t\bor sa <AID: 3 digits>\n");
             }
-            
+
             else {
                 read_user_input(aid);
                 show_asset(aid, ASIP, ASport);
@@ -1228,7 +1228,7 @@ int main(int argc, char **argv) {
                 if (getchar() != ' ') {
                     fprintf(stderr, "usage: bid <AID: 3 digits> <value: up to 6 digits>\n");
                 }
-                
+
                 else {
                     char value[VALUE_SIZE];
                     read_user_input(args);
@@ -1238,13 +1238,13 @@ int main(int argc, char **argv) {
             }
 
             else
-                printf("WARNING: No user is logged in. Please log in before requesting bid.\n"); 
+                printf("WARNING: No user is logged in. Please log in before requesting bid.\n");
 
         else if (!strcmp(command, "show_record") || !strcmp(command, "sr")) {
             if (getchar() != ' ') {
                 fprintf(stderr, "usage: show_record <AID: 3 digits>\n\t\bor sr <AID: 3 digits>\n");
             }
-            
+
             else {
                 read_user_input(aid);
                 show_record(aid, ASIP, ASport);
@@ -1254,7 +1254,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(command, "exit")) {
             if (logged_in)
                 printf("WARNING: Please log out before exiting.\n");
-            else 
+            else
                 exit(0);
         }
 
@@ -1263,6 +1263,6 @@ int main(int argc, char **argv) {
             while (getchar() != '\n');  // flushes the rest of the input
         }
     }
-    
+
     return 0;
 }

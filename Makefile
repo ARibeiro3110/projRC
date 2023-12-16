@@ -1,10 +1,12 @@
 CC = gcc
+CFLAGS = -pthread
 TARGETS = user AS
+COMMON_SRC = common.c
 
 all: $(TARGETS)
 
-$(TARGETS): %: %.c
-	$(CC) common.c $^ -o $@
+$(TARGETS): %: $(COMMON_SRC) %.c
+	$(CC) $(CFLAGS) $^ -o $@
 
 clean:
 	rm -f $(TARGETS)
