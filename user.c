@@ -98,7 +98,7 @@ void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport) {
     }
 }
 
-void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP, char *ASport) {
+int sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP, char *ASport) {
     int fd, errcode;
     struct addrinfo hints, *res;
     struct sockaddr_in addr;
@@ -107,7 +107,7 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     fd = socket(AF_INET, SOCK_DGRAM, 0); // UDP socket
     if (fd == -1) {  /*error*/
         fprintf(stderr, "ERROR: socket creation was not sucessful\n");
-        exit_error(fd, res);
+        exit(1);
     }
 
     memset(&hints, 0, sizeof hints);
@@ -120,7 +120,8 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
 
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        exit_error(fd, res);
+        close(fd);
+        exit(1);
     }
 
     errcode = getaddrinfo(ASIP, ASport, &hints, &res);
@@ -140,12 +141,19 @@ void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP
     socklen_t addrlen = sizeof(addr);
     n = recvfrom(fd, buffer, buffer_size, 0, (struct sockaddr*) &addr, &addrlen);
     if (n == -1) { /*error*/
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            printf("Peer took too long to respond. Please try again later\n");
+            return -1;
+        }
+
         fprintf(stderr, "ERROR: UDP response failed\n");
         exit_error(fd, res);
     }
 
     freeaddrinfo(res);
     close(fd);
+
+    return 1;
 }
 
 void read_user_input(char *args) {
@@ -236,7 +244,9 @@ int login(int logged_in, char *uid, char *password, char *ASIP, char *ASport) {
          buffer[RLI_RLO_RUR_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     sprintf(message, "LIN %s %s\n", uid, password);
 
-    sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport) == -1)
+        return 0;
+
     sscanf(buffer, "RLI %s\n", status);
 
     return handle_login_response(status, buffer);
@@ -284,7 +294,9 @@ int logout(char *uid, char *password, char *ASIP, char *ASport) {
          buffer[RLI_RLO_RUR_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     sprintf(message, "LOU %s %s\n", uid, password);
 
-    sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport) == -1)
+        return 0;
+
     sscanf(buffer, "RLO %s\n", status);
 
     return handle_logout_response(status, buffer);
@@ -332,7 +344,9 @@ int unregister(char *uid, char *password, char *ASIP, char *ASport) {
          buffer[RLI_RLO_RUR_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
     sprintf(message, "UNR %s %s\n", uid, password);
 
-    sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, RLI_RLO_RUR_MESSAGE_SIZE, ASIP, ASport) == -1)
+        return 0;
+
     sscanf(buffer, "RUR %s\n", status);
 
     return handle_unregister_response(status, buffer);
@@ -352,7 +366,7 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
     }
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
-        printf("Auction could not be started.\n");
+        printf("Auction could not be started or password was incorrect.\n");
 
     else if (!strcmp(status, "NLG") && buffer[7] == '\n')
         printf("User is not logged in.\n");
@@ -408,7 +422,10 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
     // open tcp socket
     int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    if (fd == -1) exit(1); //error
+    if (fd == -1) { //error
+        fprintf(stderr, "ERROR: socket creation was not sucessful\n");
+        exit(1);
+    }
 
     struct addrinfo *res, hints;
 
@@ -418,7 +435,8 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
 
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        exit_error(fd, res);
+        close(fd);
+        exit(1);
     }
 
     memset(&hints, 0, sizeof hints);
@@ -434,6 +452,12 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
     char message[OPA_MESSAGE_SIZE] = "", buffer[BUFFER_DEFAULT] = "";
 
     FILE *file_fd = fopen(asset_fname, "r");
+
+    if (file_fd == NULL && errno == 2) {
+        printf("WARNING: File %s does not exist.\n", asset_fname);
+        return;
+    }
+
     long f_size = 0;
 
     // calculate the file size
@@ -503,9 +527,15 @@ void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASpor
 
     // open tcp socket
     int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    if (fd == -1) exit(1); //error
+    if (fd == -1) { //error
+        fprintf(stderr, "ERROR: socket creation was not sucessful\n");
+        exit(1);
+    }
 
     struct addrinfo *res, hints;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET; //IPv4
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     struct timeval timeout;
     timeout.tv_sec = 5;  // 5 seconds timeout
@@ -513,12 +543,9 @@ void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASpor
 
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        exit_error(fd, res);
+        close(fd);
+        exit(1);
     }
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET; //IPv4
-    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
     if (errcode != 0) {  /*error*/
@@ -619,7 +646,9 @@ void myauctions(char *uid, char *ASIP, char *ASport) {
 
     sprintf(message, "LMA %s\n", uid);
 
-    sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport) == -1)
+        return;
+
     // reads everything into auction_list until \n character
     sscanf(buffer, "RMA %3s%[^\n]", status, auction_list);
 
@@ -680,7 +709,9 @@ void mybids(char *uid, char *ASIP, char *ASport) {
 
     sprintf(message, "LMB %s\n", uid);
 
-    sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport) == -1)
+        return;
+
     // reads everything into auction_list until \n character
     sscanf(buffer, "RMB %3s%[^\n]", status, auction_list);
 
@@ -737,7 +768,9 @@ void list(char *ASIP, char *ASport) {
     char message[LST_MESSAGE_SIZE] = "LST\n", buffer[MAX_BUFFER_MA_MB_L] = "", status[STATUS_SIZE] = "",
          auction_list[MAX_AUCTION_LIST] = "";
 
-    sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, MAX_BUFFER_MA_MB_L, ASIP, ASport) == -1)
+        return;
+
     // reads everything into auction_list until \n character
     sscanf(buffer, "RLS %3s%[^\n]", status, auction_list);
 
@@ -750,8 +783,6 @@ void list(char *ASIP, char *ASport) {
 }
 
 void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, struct addrinfo *res) {
-    int n;
-
     if (!strcmp(status, "OK")) {
         FILE *fp = fopen(fname, "w");
         if (fp == NULL) {
@@ -760,10 +791,15 @@ void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, 
         }
 
         long size = atol(fsize);
-        copy_from_socket_to_file(size, fd, res, fp);
+        if (copy_from_socket_to_file(size, fd, res, fp) == -1) {
+            fclose(fp);
+            unlink(fname);
+            return;
+        }
+
         fclose(fp);
 
-        printf("File %s was sucessfully created on your computer.\n", fname);
+        printf("File %s of size %s was sucessfully created on your computer.\n", fname, fsize);
     }
 
     else if (!strcmp(status, "NOK"))
@@ -783,13 +819,10 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     }
 
     int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    if (fd == -1) exit(1); //error
-
-    struct addrinfo *res, hints;
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET; //IPv4
-    hints.ai_socktype = SOCK_STREAM; //TCP socket
+    if (fd == -1) { //error
+        fprintf(stderr, "ERROR: socket creation was not sucessful\n");
+        exit(1);
+    }
 
     struct timeval timeout;
     timeout.tv_sec = 5;  // 5 seconds timeout
@@ -797,8 +830,14 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
 
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        exit_error(fd, res);
+        close(fd);
+        exit(1);
     }
+
+    struct addrinfo *res, hints;
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET; //IPv4
+    hints.ai_socktype = SOCK_STREAM; //TCP socket
 
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
     if (errcode != 0) {  /*error*/
@@ -816,6 +855,11 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     for (int i = 0; i < RSA_PREFIX_SIZE; i++) {
         n = read(fd, &prefix[i], 1);
         if (n == -1) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                printf("Peer took too long to respond. Please try again later\n");
+                return;
+            }
+
             fprintf(stderr, "ERROR: show_asset read failed\n");
             return;
         }
@@ -868,7 +912,7 @@ void handle_bid_response(char *status, char *aid , char *response) {
         printf("You cannot bid on an auction you are hosting.\n");
 
     else if (!strcmp(status, "NOK"))
-        printf("Auction %s is not active.\n", aid);
+        printf("Auction %s is not active or user password is incorrect.\n", aid);
 
     else if (!strcmp(status, "NLG"))
         printf("User is not logged in.\n");
@@ -896,9 +940,10 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
     }
 
     int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    if (fd == -1) exit(1); //error
-
-    struct addrinfo *res, hints;
+    if (fd == -1) { //error
+        fprintf(stderr, "ERROR: socket creation was not sucessful\n");
+        exit(1);
+    }
 
     struct timeval timeout;
     timeout.tv_sec = 5;  // 5 seconds timeout
@@ -906,9 +951,11 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
 
     if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
         fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-        exit_error(fd, res);
+        close(fd);
+        exit(1);
     }
 
+    struct addrinfo *res, hints;
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET; //IPv4
     hints.ai_socktype = SOCK_STREAM; //TCP socket
@@ -925,7 +972,6 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
     connsend_tcp_socket(message, fd, res, ASIP, ASport);
 
     char response[RBD_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
-    int n, bytes_read = 0;
     read_tcp_socket(fd, NULL, response, 9);
 
     sscanf(response, "RBD %3s", status);
@@ -1041,7 +1087,8 @@ void show_record(char *aid, char *ASIP, char *ASport) {
          bid_info[BID_INFO_SIZE] = "", closed_info[CLOSED_INFO_SIZE] = "";
     sprintf(message, "SRC %s\n", aid);
 
-    sendrec_udp_socket(message, buffer, SRC_BUFFER_SIZE, ASIP, ASport);
+    if (sendrec_udp_socket(message, buffer, SRC_BUFFER_SIZE, ASIP, ASport) == -1)
+        return;
 
     // Using this format, bid_info will always have a \n at the beginning. If
     // no bids were specified and if we used another format which matched the \n

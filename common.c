@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <math.h>
+#include <errno.h>
 
 #include "common.h"
 
@@ -54,15 +55,13 @@ int is_filename(char *word) {
         return 0;
 
     for (int i = 0; i < l; i++) {
-        if (!('0' <= word[i] <= '9' || 'A' <= word[i] <= 'Z'
-              || 'a' <= word[i] <= 'z' || word[i] == '-'
-              || word[i] == '_' || word[i] == '.'))
+        if (!(isalnum(word[i]) || word[i] == '-' || word[i] == '_' || word[i] == '.'))
             return 0;
 
         if (i == l - 4 && word[i] != '.')
             return 0;
 
-        if (i > l - 4 && !('a' <= word[i] <= 'z' || '0' <= word[i] <= '9'))
+        if (i > l - 4 && !(islower(word[i]) || isdigit(word[i])))
             return 0;
     }
     return 1;
@@ -85,12 +84,12 @@ int is_date(char *word) {
     sscanf(word, "%4d-%2d-%2d", &year, &month, &day);
 
     if (year >= 0)
-        if (1 <= month <=12) {
-            if ((1 <= day <= 31) && (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12))
+        if (1 <= month && month <= 12) {
+            if ((1 <= day && day <= 31) && (month == 1 || month == 3 || month == 5 || month == 7 || month == 8 || month == 10 || month == 12))
                 return 1;
-            else if ((1 <= day <= 30) && (month == 4 || month == 6 || month == 9 || month == 11))
+            else if ((1 <= day && day <= 30) && (month == 4 || month == 6 || month == 9 || month == 11))
                 return 1;
-            else if ((1 <= day <= 28) && month == 2)
+            else if ((1 <= day && day <= 28) && month == 2)
                 return 1;
             else if (day == 29 && month == 2 && (year % 400 == 0 ||(year % 4 == 0 && year % 100 != 0)))
                 return 1;
@@ -139,6 +138,11 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
         bytes_read = read(fd, data, BUFFER_DEFAULT);
         written += bytes_read;
         if (bytes_read == -1) { /*error*/
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                printf("Server took too long to respond. Please try again later\n");
+                return -1;
+            }
+
             fprintf(stderr, "ERROR: data read from socket failed\n");
             exit_error(fd, res);
         }
@@ -171,6 +175,7 @@ void send_asset(FILE *file_fd, int fd) {
         n = write(fd, buffer, bytes_read);
         if (n == -1) { /*error*/
             fprintf(stderr, "ERROR: data write to socket failed\n");
+            fclose(file_fd);
             exit(1);
         }
     }
@@ -179,6 +184,7 @@ void send_asset(FILE *file_fd, int fd) {
     n = write(fd, "\n", 1);
     if (n == -1) { /*error*/
         fprintf(stderr, "ERROR: terminator write failed\n");
+        fclose(file_fd);
         exit(1);
     }
 }
@@ -200,6 +206,11 @@ void read_tcp_socket(int fd, struct addrinfo *res, char *buffer, int size) {
     int bytes_read = 0, n;
     while ((n = read(fd, &buffer[bytes_read], size)) != 0) {
         if (n == -1) { /*error*/
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                printf("Peer took too long to respond. Please try again later\n");
+                return;
+            }
+
             fprintf(stderr, "ERROR: read failed\n");
             exit_error(fd, res);
         }

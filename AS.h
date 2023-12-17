@@ -1,6 +1,9 @@
 #ifndef __AS_H__
 #define __AS_H__
 
+/* Ends the program gracefully if unexpected error occurs */
+void exit_server(int code)
+
 /* Tries to lock the semaphore, exiting if failed */
 void sem_wait_(sem_t *sem);
 

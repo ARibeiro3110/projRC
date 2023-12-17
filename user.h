@@ -8,7 +8,7 @@ int is_ipv4(char *ASIP);
 void handle_main_arguments(int argc, char **argv, char *ASIP, char *ASport);
 
 /* Opens a udp socket, sends the provided message and writes the server answer onto the buffer */
-void sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP, char *ASport);
+int sendrec_udp_socket(char *message, char *buffer, int buffer_size, char *ASIP, char *ASport);
 
 /* Handles login server responses */
 int handle_login_response(char *status, char *buffer);

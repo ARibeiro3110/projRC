@@ -23,18 +23,34 @@
 int fd_udp, fd_tcp; // used to close the server graciously
 sem_t *sem[1000]; // Semaphores used with the auctions or the whole ASDIR // TODO README
 sem_t *sem_user; // Semaphore used with the users
+pid_t main_pid; // stores the pid of the main process
+
+void exit_server(int code) {
+    close(fd_udp);
+    close(fd_tcp);
+
+    for (int i = 0; i < 1000; i++) {
+        char semName[13];
+        sprintf(semName, "semaphore%03d", i);
+        sem_close(sem[i]);
+        sem_unlink(semName);
+    }
+    sem_close(sem_user);
+    sem_unlink("semaphore_user");
+    exit(code);
+}
 
 void sem_wait_(sem_t *sem) {
     if (sem_wait(sem) == -1) {
         fprintf(stderr, "ERROR: unable to lock semaphore.\n");
-        exit(1);
+        exit_server(1);
     }
 }
 
 void sem_post_(sem_t *sem) {
     if (sem_post(sem) == -1) {
         fprintf(stderr, "ERROR: unable to lock semaphore.\n");
-        exit(1);
+        exit_server(1);
     }
 }
 
@@ -45,20 +61,9 @@ void sigint_detected(int sig) {
 
     if (sig == SIGINT) {
         if (signal(SIGINT, sigint_detected) != SIG_ERR) {
-            close(fd_udp);
-            close(fd_tcp);
-
-            for (int i = 0; i < 1000; i++) {
-                char semName[13];
-                sprintf(semName, "semaphore%03d", i);
-                sem_close(sem[i]);
-                sem_unlink(semName);
-            }
-            sem_close(sem_user);
-            sem_unlink("semaphore_user");
-
-            write(0, "\nSIGINT DETECTED, SHUTTING DOWN PROCESS...\n", 44); // TODO: remove
-            exit(0);
+            if (getpid() == main_pid)
+                write(0, "\nSIGINT DETECTED, SHUTTING DOWN PROCESS...\n", 44);
+            exit_server(0);
         }
     }
 }
@@ -195,7 +200,8 @@ void create_password(char *uid, char *password) {
     fp = fopen(pass_file_path, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create password file.\n");
-        exit(1);
+        fclose(fp);
+        exit_server(1);
     }
 
     fprintf(fp, "%s", password);
@@ -210,7 +216,8 @@ void create_login(char *uid) {
     fp = fopen(login_name, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create login file.\n");
-        exit(1);
+        fclose(fp);
+        exit_server(1);
     }
 
     fprintf(fp, "Logged in");
@@ -222,7 +229,7 @@ void send_udp_ERR(int fd, struct sockaddr_in addr, int verbose) {
     int n = sendto(fd, "ERR\n", 4, 0, (struct sockaddr*) &addr, addrlen);
 	if (n == -1)  {
         fprintf(stderr, "ERROR: unable to send response.\n");
-        exit(1);
+        exit_server(1);
     }
 
     if (verbose)
@@ -238,7 +245,7 @@ void send_udp_response_ERR(char *prefix, int fd, struct sockaddr_in addr, int ve
     int n = sendto(fd, response, strlen(response), 0, (struct sockaddr*) &addr, addrlen);
     if (n == -1)  {
         fprintf(stderr, "ERROR: unable to send response.\n");
-        exit(1);
+        exit_server(1);
     }
 
     if (verbose)
@@ -251,7 +258,7 @@ void send_udp_response(char *response, int fd, struct sockaddr_in addr) {
     int n = sendto(fd, response, strlen(response), 0, (struct sockaddr*) &addr, addrlen);
 	if (n == -1)  {
         fprintf(stderr, "ERROR: unable to send response.\n");
-        exit(1);
+        exit_server(1);
     }
 }
 
@@ -272,21 +279,21 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
     if (!exists_dir(path)) { // directory does not exist
         if (mkdir(path, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create %s directory.\n", uid);
-            exit(1);
+            exit_server(1);
         }
 
         char hosted_dir_path[24];
         sprintf(hosted_dir_path, "ASDIR/USERS/%s/HOSTED/", uid);
         if (mkdir(hosted_dir_path, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create %s hosted directory.\n", uid);
-            exit(1);
+            exit_server(1);
         }
 
         char bidded_dir_path[24];
         sprintf(bidded_dir_path, "ASDIR/USERS/%s/BIDDED/", uid);
         if (mkdir(bidded_dir_path, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create %s bidded directory.\n", uid);
-            exit(1);
+            exit_server(1);
         }
 
         create_password(uid, user_password);
@@ -305,13 +312,13 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
             FILE *fp = fopen(pass_file_path, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
-                exit(1);
+                exit_server(1);
             }
 
             int ret = fread(file_password, 1, 8, fp);
             if (ret < 8) {
                 fprintf(stderr, "ERROR: pass file read failed\n");
-                return;
+                exit_server(1);
             }
 
             file_password[8] = '\0';
@@ -379,13 +386,13 @@ void handle_logout_request(char *uid, char *user_password, int fd, struct sockad
             FILE *fp = fopen(pass_file_path, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
-                exit(1);
+                exit_server(1);
             }
 
             int ret = fread(file_password, 1, 8, fp);
             if (ret < 8) {
                 fprintf(stderr, "ERROR: pass file read failed\n");
-                return;
+                exit_server(1);
             }
 
             file_password[8] = '\0';
@@ -508,17 +515,17 @@ int auction_duration_has_expired(char *aid, char *start_file_path) {
     char buffer[96];
     fgets(buffer, 96, fp_start);  // read until \n
 
-    int start_value;
-    long timeactive;
-    char uid[UID_SIZE], name[NAME_SIZE], asset_fname[FILENAME_SIZE],
-         start_date[DATE_SIZE], start_time[TIME_SIZE];
-    sscanf(buffer, "%s %s %s %d %s %s %ld", uid, name, asset_fname, &start_value, start_date, start_time, &timeactive);
+    int timeactive;
+    sscanf(buffer, "%*s %*s %*s %*d %*s %*s %d", &timeactive);
+
+    if (timeactive < 0 || timeactive > 99999)   
+        exit_server(1);
 
     fgets(buffer, 20, fp_start);  // read start_fulltime (long max 19 digits)
     buffer[strlen(buffer)] = '\0';
     fclose(fp_start);
 
-    long start_fulltime = atoi(buffer), time_limit = start_fulltime + timeactive;
+    int start_fulltime = atoi(buffer), time_limit = start_fulltime + timeactive;
 
     time_t fulltime;
     time(&fulltime);
@@ -544,7 +551,7 @@ void append_auctions(char *response, struct dirent **filelist, int n_entries) {
 
                 if (strlen(aid) != 3 || !is_numeric(aid)) {
                     fprintf(stderr, "ERROR: aid has wrong format.\n");
-                    exit(1);
+                    exit_server(1);
                 }
 
                 char start_file_path[33];
@@ -553,7 +560,7 @@ void append_auctions(char *response, struct dirent **filelist, int n_entries) {
 
                 if (exists_file(start_file_path) != 1) {
                     fprintf(stderr, "ERROR: start file for auction %s does not exist.\n", aid);
-                    exit(1);
+                    exit_server(1);
                 }
 
                 char end_file_path[31];
@@ -789,8 +796,10 @@ int get_bid_list(char *bid_info, char *aid) {
         len = strlen(filelist[n_entries]->d_name) ;
         if (len == 10) {
             sscanf(filelist[n_entries]->d_name, "%s.txt", bid_value);
-            sprintf(pathname, "ASDIR/AUCTIONS/%s/BIDS/%s", aid, bid_value) ;
+            if (strlen(bid_value) > 6 || !is_numeric(bid_value))
+                exit(1);
 
+            sprintf(pathname, "ASDIR/AUCTIONS/%s/BIDS/%s", aid, bid_value);
             FILE *fp = fopen(pathname, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: unable to open bid file.\n");
@@ -955,7 +964,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
 
     if (!strcmp(message_type, "LIN")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE];
-        sscanf(&buffer[4], "%s %s", uid, password);
+        sscanf(&buffer[4], "%6s %s", uid, password);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != '\n'
             || buffer[20] != '\0' || strlen(buffer) - 14 != 6)
@@ -967,7 +976,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
 
     else if (!strcmp(message_type, "LOU")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE];
-        sscanf(&buffer[4], "%s %s", uid, password);
+        sscanf(&buffer[4], "%6s %s", uid, password);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != '\n'
             || buffer[20] != '\0' || strlen(buffer) - 14 != 6)
@@ -979,7 +988,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
 
     else if (!strcmp(message_type, "UNR")) {
         char uid[UID_SIZE], password[PASSWORD_SIZE];
-        sscanf(&buffer[4], "%s %s", uid, password);
+        sscanf(&buffer[4], "%6s %s", uid, password);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != '\n'
             || buffer[20] != '\0' || strlen(buffer) - 14 != 6)
@@ -1161,12 +1170,12 @@ void create_hosted(char *uid, int aid) {
     fclose(fp);
 }
 
-void handle_open_auction_request(int newfd, char *uid, char *password, char *name,
+void handle_open_auction_request(int newfd, char *uid, char *user_password, char *name,
                                  char *start_value, char *timeactive,
                                  char *asset_fname, long f_size, int verbose) {
 
-    if (strlen(uid) != 6 || !is_numeric(uid) || strlen(password) != 8
-        || !is_alphanumeric(password) || strlen(name) > 10
+    if (strlen(uid) != 6 || !is_numeric(uid) || strlen(user_password) != 8
+        || !is_alphanumeric(user_password) || strlen(name) > 10
         || !is_auction_name(name) || !is_filename(asset_fname)
         || strlen(start_value) > 6 || !is_numeric(start_value)
         || strlen(timeactive) > 5 || !is_numeric(timeactive)) {
@@ -1181,12 +1190,43 @@ void handle_open_auction_request(int newfd, char *uid, char *password, char *nam
     sprintf(login_file_path, "ASDIR/USERS/%s/%s_login.txt", uid, uid);
 
     if (!exists_file(login_file_path)) {
-        sprintf(response, "RCL NLG\n");
+        sprintf(response, "ROA NLG\n");
 
         if (verbose)
             printf("UID=%s: open_auction request; user not logged in, open failed\n\n", uid);
 
+        send_tcp_response(response, newfd);
         return;
+    }
+
+    char pass_file_path[35], file_password[9];
+    sprintf(pass_file_path, "ASDIR/USERS/%s/%s_pass.txt", uid, uid);
+
+    if (exists_file(pass_file_path) == 1) {
+        FILE *fp = fopen(pass_file_path, "r");
+        if (fp == NULL) {
+            fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
+            exit(1);
+        }
+
+        int ret = fread(file_password, 1, 8, fp);
+        if (ret < 8) {
+            fprintf(stderr, "ERROR: pass file read failed\n");
+            return;
+        }
+
+        file_password[8] = '\0';
+        fclose(fp);
+
+        if (strcmp(file_password, user_password)) {
+            sprintf(response, "ROA NOK\n");
+
+            if (verbose)
+                printf("UID=%s: open_auction request; incorrect password match, open failed\n\n", uid);
+
+            send_tcp_response(response, newfd);
+            return;
+        }
     }
 
     sem_wait_(sem[0]);
@@ -1229,6 +1269,9 @@ void handle_open_auction_request(int newfd, char *uid, char *password, char *nam
     else {
         int aid;
         sscanf(filelist[n_entries - 1]->d_name, "%d", &aid);
+
+        if (aid < 1 || aid > 999)
+            exit(1);
 
         if (aid == 999) {
             sprintf(response, "ROA NOK\n");
@@ -1279,10 +1322,13 @@ int create_close(char *end_file_path, char *start_file_path) {
     char buffer[96];
     fgets(buffer, 96, fp_start);  // read until \n
 
-    long timeactive;
-    sscanf(buffer, "%*s %*s %*s %*d %*s %*s %ld", &timeactive);
+    int timeactive;
+    sscanf(buffer, "%*s %*s %*s %*d %*s %*s %d", &timeactive);
 
-    fgets(buffer, 20, fp_start);  // read start_fulltime (long max 19 digits)
+    if (timeactive < 0 || timeactive > 99999)   
+        exit(1);
+
+    fgets(buffer, 20, fp_start);  // read start_fulltime (int max 19 digits)
     buffer[strlen(buffer)] = '\0';
     fclose(fp_start);
 
@@ -1431,6 +1477,11 @@ long asset_fsize(char *fname) {
 void handle_show_asset_request(int newfd, char *aid, int verbose) {
     char response[RSA_PREFIX_SIZE];
 
+    if (strlen(aid) != 3 || !is_numeric(aid)) {
+        send_tcp_response_ERR("RSA", newfd, verbose);
+        return;
+    }
+
     char start_file_path[33], end_file_path[31];;
     sprintf(start_file_path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
     sprintf(end_file_path, "ASDIR/AUCTIONS/%s/END_%s.txt", aid, aid);
@@ -1444,11 +1495,11 @@ void handle_show_asset_request(int newfd, char *aid, int verbose) {
         sprintf(response, "RSA NOK\n");
 
         if (verbose)
-            printf("AID=%s: show_asset request; no file to be sent or some other problem occured, show_asset failed\n\n", aid);
+            printf("AID=%s: show_asset request; no file to be sent, show_asset failed\n\n", aid);
     }
 
     else {
-        char uid[UID_SIZE], name[NAME_SIZE], asset_fname[FILENAME_SIZE];
+        char asset_fname[FILENAME_SIZE];
 
         FILE *fp = fopen(start_file_path, "r");
         if (fp == NULL) {
@@ -1459,7 +1510,10 @@ void handle_show_asset_request(int newfd, char *aid, int verbose) {
         fgets(buffer, 96, fp);
         fclose(fp);
 
-        sscanf(buffer, "%s %s %s", uid, name, asset_fname);
+        sscanf(buffer, "%*s %*s %s", asset_fname);
+
+        if (!is_filename(asset_fname))
+            exit(1);
 
         char asset_path[50];
         sprintf(asset_path, "ASDIR/AUCTIONS/%s/ASSET/%s", aid, asset_fname);
@@ -1517,7 +1571,7 @@ void create_bid(int highest_bid, char *aid, char *uid) {
 
     char buffer[96];
     fgets(buffer, 96, fp_start);  // read until \n
-    fgets(buffer, 20, fp_start);  // read start_fulltime (long max 19 digits)
+    fgets(buffer, 20, fp_start);  // read start_fulltime (int max 19 digits)
     buffer[strlen(buffer)] = '\0';
     fclose(fp_start);
 
@@ -1591,6 +1645,9 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             sscanf(buffer, "%*s %*s %*s %d", &min_bid);
             fclose(fp_start);
 
+            if (min_bid < 0 || min_bid > 999999)
+                exit(1);
+
             if (attemped_bid > min_bid) {
                 create_bid(attemped_bid, aid, uid);
                 create_bidded(uid, aid);
@@ -1633,6 +1690,9 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             sscanf(buffer, "%*s %*s %*s %d", &min_bid);
             fclose(fp_start);
 
+            if (min_bid < 0 || min_bid > 999999)
+                exit(1);
+
             if (attemped_bid > min_bid) {
                 create_bid(attemped_bid, aid, uid);
                 create_bidded(uid, aid);
@@ -1653,6 +1713,9 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
         else {
             int highest_bid, attemped_bid = atoi(value);
             sscanf(filelist[n_entries - 1]->d_name, "%d.txt", &highest_bid);
+
+            if (highest_bid < 0 || highest_bid > 999999)
+                exit(1);
 
             if (attemped_bid > highest_bid) {
                 create_bid(attemped_bid, aid, uid);
@@ -1744,6 +1807,13 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
                         attempt_bid(aid, uid, value, response, verbose);
                 }
             }
+            
+            else {
+                sprintf(response, "RBD NOK\n");
+
+                if (verbose)
+                    printf("UID=%s: bid request; incorrect password match, bid failed\n\n", uid);
+            }
         }
 
         else {
@@ -1765,7 +1835,16 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
         printf("REQUEST BY: %s - PORT No: %d\n", inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
 
     int n = read(newfd, buffer, MESSAGE_TYPE_SIZE);
-    if (n == -1) exit(1);
+    if (n == -1) {
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {
+            if (verbose)
+                printf("Peer took too long to respond. Waiting for new tcp request\n\n");
+            return;
+        }
+
+        close(newfd);
+        exit(1);
+    }
     sscanf(buffer, "%3s", message_type);
 
     if (!strcmp(message_type, "OPA")) {
@@ -1791,7 +1870,7 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
         start_value[VALUE_SIZE] = "", timeactive[SEC_SIZE] = "";
         long f_size;
 
-        sscanf(&buffer[4], "%s %s %s %s %s %s %ld ", uid, password, name, start_value, timeactive, asset_fname, &f_size);
+        sscanf(&buffer[4], "%6s %8s %10s %6s %5s %24s %ld ", uid, password, name, start_value, timeactive, asset_fname, &f_size);
 
         int name_size = strlen(name), start_value_size = strlen(start_value),
             timeactive_size = strlen(timeactive), asset_fname_size = strlen(asset_fname);
@@ -1814,7 +1893,7 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE];
 
         read_tcp_socket(newfd, NULL, &buffer[4], 21);
-        sscanf(&buffer[4], "%s %s %s", uid, password, aid);
+        sscanf(&buffer[4], "%6s %8s %s", uid, password, aid);
 
         if (buffer[3] != ' ' || buffer[10] != ' ' || buffer[19] != ' '
             || buffer[23] != '\n' || strlen(buffer) - 17 != 7)
@@ -1841,7 +1920,7 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE], value[VALUE_SIZE];
 
         read_tcp_socket(newfd, NULL, &buffer[4], 28);
-        sscanf(&buffer[4], "%s %s %s %s", uid, password, aid, value);
+        sscanf(&buffer[4], "%8s %6s %3s %s", uid, password, aid, value);
 
         int value_size = strlen(value);
 
@@ -1861,22 +1940,11 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
 int main(int argc, char **argv) {
     char ASport[ASPORT_SIZE] = "";
     int verbose = 0;
-
-    for (int i = 0; i < 1000; i++) {
-        char semName[13];
-        sprintf(semName, "semaphore%03d", i);
-        if ((sem[i] = sem_open(semName, O_CREAT, 0600, 1)) == SEM_FAILED) {
-            fprintf(stderr, "ERROR: sem_open failed\n");
-        }
-    }
-
-    char semName[15] = "semaphore_user";
-    if ((sem_user = sem_open(semName, O_CREAT, 0600, 1)) == SEM_FAILED) {
-        fprintf(stderr, "ERROR: sem_open failed\n");
-    }
+    main_pid = getpid();
 
     handle_main_arguments(argc, argv, ASport, &verbose);
     setup_environment();
+
     int errcode;
     ssize_t n;
     struct addrinfo hints_udp, hints_tcp, *res_udp, *res_tcp;
@@ -1892,14 +1960,25 @@ int main(int argc, char **argv) {
     hints_udp.ai_flags = AI_PASSIVE;
 
     errcode = getaddrinfo(NULL, ASport, &hints_udp, &res_udp);
-    if (errcode != 0) /*error*/ exit(1);
+    if (errcode != 0) {/*error*/ 
+        close(fd_udp);
+        exit(1);
+    }
 
     n = bind(fd_udp, res_udp->ai_addr, res_udp->ai_addrlen);
-    if (n == -1) /*error*/ exit(1);
+    if (n == -1) {/*error*/ 
+        close(fd_udp);
+        freeaddrinfo(res_udp);
+        exit(1);
+    }
 
     // TCP socket
     fd_tcp = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd_tcp == -1) exit(1);
+    if (fd_tcp == -1) {
+        close(fd_udp);
+        freeaddrinfo(res_udp);
+        exit(1);
+    }
 
     memset(&hints_tcp, 0, sizeof hints_tcp);
     hints_tcp.ai_family = AF_INET;
@@ -1907,17 +1986,63 @@ int main(int argc, char **argv) {
     hints_tcp.ai_flags = AI_PASSIVE;
 
     errcode = getaddrinfo(NULL, ASport, &hints_tcp, &res_tcp);
-    if (errcode != 0) /*error*/ exit(1);
+    if (errcode != 0) {
+        close(fd_tcp);
+        close(fd_udp);
+        freeaddrinfo(res_udp);
+        exit(1);
+    }
 
     n = bind(fd_tcp, res_tcp->ai_addr, res_tcp->ai_addrlen);
-    if (n == -1) /*error*/ exit(1);
+    if (n == -1) {
+        close(fd_tcp);
+        close(fd_udp);
+        freeaddrinfo(res_tcp);
+        freeaddrinfo(res_udp);
+        exit(1);
+    }
+
+    for (int i = 0; i < 1000; i++) {
+        char semName[13];
+        sprintf(semName, "semaphore%03d", i);
+        if ((sem[i] = sem_open(semName, O_CREAT, 0600, 1)) == SEM_FAILED) {
+            fprintf(stderr, "ERROR: sem_open failed\n");
+            close(fd_tcp);
+            close(fd_udp);
+            freeaddrinfo(res_tcp);
+            freeaddrinfo(res_udp);
+            for (int j = 0; j < i; j++) {
+                char semName[13];
+                sprintf(semName, "semaphore%03d", j);
+                sem_close(sem[j]);
+                sem_unlink(semName);
+            }
+            exit(1);
+        }
+    }
+
+    char semName[15] = "semaphore_user";
+    if ((sem_user = sem_open(semName, O_CREAT, 0600, 1)) == SEM_FAILED) {
+        fprintf(stderr, "ERROR: sem_open failed\n");
+        close(fd_tcp);
+        close(fd_udp);
+        freeaddrinfo(res_tcp);
+        freeaddrinfo(res_udp);
+        for (int i = 0; i < 1000; i++) {
+            char semName[13];
+            sprintf(semName, "semaphore%03d", i);
+            sem_close(sem[i]);
+            sem_unlink(semName);
+        }
+        exit(1);
+    }
 
     pid_t p;
     p = fork();
 
     if (p < 0) {
         perror("fork fail");
-        exit(1);
+        exit_server(1);
     }
 
     else if (p == 0) {
@@ -1934,22 +2059,31 @@ int main(int argc, char **argv) {
 
         signal(SIGINT, sigint_detected);
 
-        if (listen(fd_tcp, 5) == -1) /*error*/ exit(1);
-
+        if (listen(fd_tcp, 5) == -1) /*error*/ exit_server(1);
 
         while (1) {
             socklen_t addrlen = sizeof(addr_tcp);
             int newfd;
 
             if ((newfd = accept(fd_tcp, (struct sockaddr *) &addr_tcp, &addrlen)) == -1)
-                exit(1);
+                exit_server(1);
+
+            struct timeval timeout;
+            timeout.tv_sec = 5;  // 5 seconds timeout
+            timeout.tv_usec = 0;
+
+            if (setsockopt(newfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+                fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
+                close(newfd);
+                exit_server(1);
+            }
 
             pid_t p;
             p = fork();
 
             if (p < 0) {
                 perror("fork fail");
-                exit(1);
+                exit_server(1);
             }
 
             else if (p == 0) {

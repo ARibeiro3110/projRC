@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -pthread
+CFLAGS = -pthread -Wall
 TARGETS = user AS
 COMMON_SRC = common.c
 
