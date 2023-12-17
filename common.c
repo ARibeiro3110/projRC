@@ -155,6 +155,9 @@ int copy_from_socket_to_file(int size, int fd, struct addrinfo *res, FILE *fp) {
         memset(data, 0, BUFFER_DEFAULT);
     }
 
+    if (data[bytes_read - 1] != '\n')
+        return -1;
+
     return written;
 }
 

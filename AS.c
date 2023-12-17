@@ -21,7 +21,8 @@
 
 // Global variables
 int fd_udp, fd_tcp; // used to close the server graciously
-sem_t *sem[1000]; // Semaphores used to synchronize access to the shared memory
+sem_t *sem[1000]; // Semaphores used with the auctions or the whole ASDIR // TODO README
+sem_t *sem_user; // Semaphore used with the users
 
 void sem_wait_(sem_t *sem) {
     if (sem_wait(sem) == -1) {
@@ -53,8 +54,10 @@ void sigint_detected(int sig) {
                 sem_close(sem[i]);
                 sem_unlink(semName);
             }
+            sem_close(sem_user);
+            sem_unlink("semaphore_user");
 
-            write(0, "\nSIGINT DETECTED, SHUTTING DOWN PROCESS...\n", 44);
+            write(0, "\nSIGINT DETECTED, SHUTTING DOWN PROCESS...\n", 44); // TODO: remove
             exit(0);
         }
     }
@@ -264,6 +267,8 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
     char path[19];
     sprintf(path, "ASDIR/USERS/%s", uid);
 
+    sem_wait_(sem_user);
+
     if (!exists_dir(path)) { // directory does not exist
         if (mkdir(path, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create %s directory.\n", uid);
@@ -337,11 +342,11 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
         }
     }
 
+    sem_post_(sem_user);
     send_udp_response(response, fd, addr);
 }
 
 void handle_logout_request(char *uid, char *user_password, int fd, struct sockaddr_in addr, int verbose) {
-    socklen_t addrlen = sizeof(addr);
     char response[9];
 
     if (strlen(uid) != 6 || !is_numeric(uid) || strlen(user_password) != 8
@@ -354,6 +359,8 @@ void handle_logout_request(char *uid, char *user_password, int fd, struct sockad
     int found_pass = 0, found_login = 0;
 
     sprintf(path, "ASDIR/USERS/%s", uid);
+    sem_wait_(sem_user);
+
     if (!exists_dir(path)) {   // directory does not exist
         sprintf(response, "RLO UNR\n");
 
@@ -424,11 +431,11 @@ void handle_logout_request(char *uid, char *user_password, int fd, struct sockad
         }
     }
 
+    sem_post_(sem_user);
     send_udp_response(response, fd, addr);
 }
 
 void handle_unregister_request(char *uid, char *user_password, int fd, struct sockaddr_in addr, int verbose) {
-    socklen_t addrlen = sizeof(addr);
     char response[9];
 
     if (strlen(uid) != 6 || !is_numeric(uid) || strlen(user_password) != 8
@@ -441,7 +448,9 @@ void handle_unregister_request(char *uid, char *user_password, int fd, struct so
     int found_pass = 0, found_login = 0;
 
     sprintf(path, "ASDIR/USERS/%s", uid);
-    if (!exists_dir(path)) {// directory does not exist
+    sem_wait_(sem_user);
+
+    if (!exists_dir(path)) { // directory does not exist
         sprintf(response, "RUR UNR\n");
 
         if (verbose)
@@ -485,6 +494,7 @@ void handle_unregister_request(char *uid, char *user_password, int fd, struct so
         }
     }
 
+    sem_post_(sem_user);
     send_udp_response(response, fd, addr);
 }
 
@@ -539,6 +549,7 @@ void append_auctions(char *response, struct dirent **filelist, int n_entries) {
 
                 char start_file_path[33];
                 sprintf(start_file_path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
+                sem_wait_(sem[atoi(aid)]);
 
                 if (exists_file(start_file_path) != 1) {
                     fprintf(stderr, "ERROR: start file for auction %s does not exist.\n", aid);
@@ -556,6 +567,7 @@ void append_auctions(char *response, struct dirent **filelist, int n_entries) {
                     create_close(end_file_path, start_file_path);
                 }
 
+                sem_post_(sem[atoi(aid)]);
                 sprintf(aid_state, " %s %d", aid, state);
                 strcat(response, aid_state);
             }
@@ -570,7 +582,6 @@ void append_auctions(char *response, struct dirent **filelist, int n_entries) {
 }
 
 void handle_myauctions_request(char *uid, int fd, struct sockaddr_in addr, int verbose) {
-    socklen_t addrlen = sizeof(addr);
     char response[MAX_BUFFER_MA_MB_L];
 
     if (strlen(uid) != 6 || !is_numeric(uid)) {
@@ -621,7 +632,6 @@ void handle_myauctions_request(char *uid, int fd, struct sockaddr_in addr, int v
 }
 
 void handle_mybids_request(char *uid, int fd, struct sockaddr_in addr, int verbose) {
-    socklen_t addrlen = sizeof(addr);
     char response[MAX_BUFFER_MA_MB_L];
 
     if (strlen(uid) != 6 || !is_numeric(uid)) {
@@ -691,6 +701,7 @@ void append_auctions_list(char *response, struct dirent **filelist, int n_entrie
 
                 char start_file_path[33];
                 sprintf(start_file_path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
+                sem_wait_(sem[atoi(aid)]);
 
                 if (exists_file(start_file_path) != 1) {
                     fprintf(stderr, "ERROR: start file for auction %s does not exist.\n", aid);
@@ -708,6 +719,7 @@ void append_auctions_list(char *response, struct dirent **filelist, int n_entrie
                     create_close(end_file_path, start_file_path);
                 }
 
+                sem_post_(sem[atoi(aid)]);
                 sprintf(aid_state, " %s %d", aid, state);
                 strcat(response, aid_state);
             }
@@ -722,7 +734,6 @@ void append_auctions_list(char *response, struct dirent **filelist, int n_entrie
 }
 
 void handle_list_request(int fd, struct sockaddr_in addr, int verbose) {
-    socklen_t addrlen = sizeof(addr);
     char response[MAX_BUFFER_MA_MB_L];
 
     char path[15] = "ASDIR/AUCTIONS";
@@ -853,7 +864,6 @@ int get_closed_info(char *closed_info, char *aid) {
 }
 
 void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int verbose) {
-    socklen_t addrlen = sizeof(addr);
     char response[SRC_BUFFER_SIZE], buffer[76];
 
     if (strlen(aid) != 3 || !is_numeric(aid)) {
@@ -863,6 +873,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
 
     char path[33];
     sprintf(path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
+    sem_wait(sem[atoi(aid)]);
 
     if (!exists_file(path)) {
         sprintf(response, "RRC NOK\n");
@@ -904,6 +915,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
             || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5
             || !is_numeric(timeactive)) {
             fprintf(stderr, "ERROR: start file information in wrong format\n");
+            sem_post_(sem[atoi(aid)]);
             return;
         }
 
@@ -923,8 +935,10 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
             strcat(response, closed_info);
 
         strcat(response, "\n");
-        send_udp_response(response, fd, addr);
     }
+
+    sem_post(sem[atoi(aid)]);
+    send_udp_response(response, fd, addr);
 }
 
 void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
@@ -1178,7 +1192,6 @@ void handle_open_auction_request(int newfd, char *uid, char *password, char *nam
     sem_wait_(sem[0]);
 
     int n_entries = scandir(path, &filelist, 0, alphasort);
-    // fprintf(stderr, "PID: %d;\tn_entries: %d\n", getpid(), n_entries); // TODO
 
     if (n_entries == 2 || (n_entries < 0 && errno == 2)) {
         sem_wait_(sem[1]);
@@ -1311,6 +1324,7 @@ void handle_close_auction_request(int newfd, char *uid, char *user_password, cha
 
     char response[9], pass_file_path[35], file_password[9];
     sprintf(pass_file_path, "ASDIR/USERS/%s/%s_pass.txt", uid, uid);
+    sem_wait_(sem[atoi(aid)]);
 
     if (exists_file(pass_file_path) == 1) {
         FILE *fp = fopen(pass_file_path, "r");
@@ -1400,6 +1414,7 @@ void handle_close_auction_request(int newfd, char *uid, char *user_password, cha
             printf("UID=%s: closed_auction request; user does not exist or password is incorrect, closed failed\n\n", uid);
     }
 
+    sem_post_(sem[atoi(aid)]);
     send_tcp_response(response, newfd);
 }
 
@@ -1419,8 +1434,6 @@ void handle_show_asset_request(int newfd, char *aid, int verbose) {
     char start_file_path[33], end_file_path[31];;
     sprintf(start_file_path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
     sprintf(end_file_path, "ASDIR/AUCTIONS/%s/END_%s.txt", aid, aid);
-
-    fprintf(stderr, "\n---> PID: %d;\tAID: %s\n", getpid(), aid); // TODO
 
     sem_wait_(sem[atoi(aid)]);
 
@@ -1672,6 +1685,7 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
 
     sprintf(start_file_path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
     sprintf(end_file_path, "ASDIR/AUCTIONS/%s/END_%s.txt", aid, aid);
+    sem_wait_(sem[atoi(aid)]);
 
     if (!exists_file(end_file_path) && auction_duration_has_expired(aid, start_file_path))
         create_close(end_file_path, start_file_path);
@@ -1697,7 +1711,8 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
             int ret = fread(file_password, 1, 8, fp);
             if (ret < 8) {
                 fprintf(stderr, "ERROR: pass file read failed\n");
-                return;
+                sem_post_(sem[atoi(aid)]);
+                return; // TODO
             }
 
             file_password[8] = '\0';
@@ -1739,6 +1754,7 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
         }
     }
 
+    sem_post_(sem[atoi(aid)]);
     send_tcp_response(response, newfd);
 }
 
@@ -1747,10 +1763,6 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
 
     if (verbose)
         printf("REQUEST BY: %s - PORT No: %d\n", inet_ntoa(addr_tcp.sin_addr), ntohs(addr_tcp.sin_port));
-
-    struct timeval timeout_tcp;
-    timeout_tcp.tv_sec = 5;  // 5 seconds timeout
-    timeout_tcp.tv_usec = 0;
 
     int n = read(newfd, buffer, MESSAGE_TYPE_SIZE);
     if (n == -1) exit(1);
@@ -1858,9 +1870,14 @@ int main(int argc, char **argv) {
         }
     }
 
+    char semName[15] = "semaphore_user";
+    if ((sem_user = sem_open(semName, O_CREAT, 0600, 1)) == SEM_FAILED) {
+        fprintf(stderr, "ERROR: sem_open failed\n");
+    }
+
     handle_main_arguments(argc, argv, ASport, &verbose);
     setup_environment();
-    int errcode, out_fds;
+    int errcode;
     ssize_t n;
     struct addrinfo hints_udp, hints_tcp, *res_udp, *res_tcp;
     struct sockaddr_in addr_udp, addr_tcp;
@@ -1926,10 +1943,6 @@ int main(int argc, char **argv) {
 
             if ((newfd = accept(fd_tcp, (struct sockaddr *) &addr_tcp, &addrlen)) == -1)
                 exit(1);
-
-            struct timeval timeout_tcp;
-            timeout_tcp.tv_sec = 5;  // 5 seconds timeout
-            timeout_tcp.tv_usec = 0;
 
             pid_t p;
             p = fork();
