@@ -1153,7 +1153,7 @@ void show_record(char *aid, char *ASIP, char *ASport) {
         }
 
         if (strlen(buffer) - (26 + auction_name_size + asset_fname_size
-            + start_value_size + timeactive_size + (strlen(bid_info) - 1) + strlen(closed_info)) != 12){
+            + start_value_size + timeactive_size + strlen(bid_info) + strlen(closed_info)) != 11){
             fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
             exit(1);
         }

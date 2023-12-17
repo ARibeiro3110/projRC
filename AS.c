@@ -784,7 +784,6 @@ int get_bid_list(char *bid_info, char *aid) {
     sprintf(dirname, "ASDIR/AUCTIONS/%s/BIDS", aid);
 
     n_entries = scandir(dirname, &filelist, 0, alphasort) ;
-
     if (n_entries == 2 || (n_entries < 0 && errno == 2))
         return 0;
 
@@ -800,8 +799,6 @@ int get_bid_list(char *bid_info, char *aid) {
         len = strlen(filelist[n_entries]->d_name) ;
         if (len == 10) {
             sscanf(filelist[n_entries]->d_name, "%s.txt", bid_value);
-            if (strlen(bid_value) > 6 || !is_numeric(bid_value))
-                exit_server(1);
 
             sprintf(pathname, "ASDIR/AUCTIONS/%s/BIDS/%s", aid, bid_value);
             FILE *fp = fopen(pathname, "r");
@@ -886,7 +883,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
 
     char path[33];
     sprintf(path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
-    sem_wait(sem[atoi(aid)]);
+    sem_wait_(sem[atoi(aid)]);
 
     if (!exists_file(path)) {
         sprintf(response, "RRC NOK\n");
@@ -904,6 +901,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
         FILE *fp = fopen(path, "r");
         if (fp == NULL) {
             fprintf(stderr, "ERROR: unable to open start file.\n\n");
+            sem_post_(sem[atoi(aid)]);
             exit_server(1);
         }
 
@@ -950,7 +948,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
         strcat(response, "\n");
     }
 
-    sem_post(sem[atoi(aid)]);
+    sem_post_(sem[atoi(aid)]);
     send_udp_response(response, fd, addr);
 }
 
@@ -1772,6 +1770,7 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
             FILE *fp = fopen(pass_file_path, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
+                sem_post_(sem[atoi(aid)]);
                 exit_server(1);
             }
 
@@ -1886,7 +1885,7 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
             || buffer[23 + name_size + start_value_size + timeactive_size + asset_fname_size] != ' '
             || buffer[24 + name_size + start_value_size + timeactive_size + asset_fname_size + OoM(f_size)] != ' '
             || strlen(buffer) - (14 + name_size + start_value_size + timeactive_size + asset_fname_size + OoM(f_size)) != 11
-        )
+        ) 
             send_tcp_ERR(newfd, verbose);
 
         else
@@ -1924,7 +1923,7 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
         char uid[UID_SIZE], password[PASSWORD_SIZE], aid[AID_SIZE], value[VALUE_SIZE];
 
         read_tcp_socket(newfd, NULL, &buffer[4], 28);
-        sscanf(&buffer[4], "%8s %6s %3s %s", uid, password, aid, value);
+        sscanf(&buffer[4], "%6s %8s %3s %s", uid, password, aid, value);
 
         int value_size = strlen(value);
 
