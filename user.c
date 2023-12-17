@@ -1152,8 +1152,16 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             exit(1);
         }
 
+        // when there is closure information, \n is not part of the strings so to
+        // make the calculations work, we have to add 1
+        int tmp = strlen(closed_info);
+        if (tmp)
+            tmp += 1;
+
         if (strlen(buffer) - (26 + auction_name_size + asset_fname_size
-            + start_value_size + timeactive_size + strlen(bid_info) + strlen(closed_info)) != 11){
+            + start_value_size + timeactive_size + strlen(bid_info) + tmp) != 11){
+            printf("%d", strlen(buffer) - (26 + auction_name_size + asset_fname_size
+            + start_value_size + timeactive_size + strlen(bid_info) + tmp));
             fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
             exit(1);
         }
