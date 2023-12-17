@@ -195,16 +195,20 @@ int handle_login_response(char *status, char *buffer) {
 
     else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
              || strlen(buffer) - status_size != 5
-             || buffer[5 + status_size] != '\0')
-        fprintf(stderr, "Server message includes whitespaces other than ' '.\n");
+             || buffer[5 + status_size] != '\0') {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 
     else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User logged in.\n");
         return 1;
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 
     return 0;
 }
@@ -269,16 +273,20 @@ int handle_logout_response(char *status, char *buffer) {
 
     else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
              || strlen(buffer) - status_size != 5
-             || buffer[5 + status_size] != '\0')
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+             || buffer[5 + status_size] != '\0') {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 
     else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User logged out.\n");
         return 1;
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 
     return 0;
 }
@@ -319,16 +327,20 @@ int handle_unregister_response(char *status, char *buffer) {
 
     else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
              || strlen(buffer) - status_size != 5
-             || buffer[5 + status_size] != '\0')
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
+             || buffer[5 + status_size] != '\0') {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 
     else if (!strcmp(status, "OK") && buffer[6] == '\n') {
         printf("User unregistered.\n");
         return 1;
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 
     return 0;
 }
@@ -374,21 +386,22 @@ void handle_open_auction_response(char *status, char *aid, char *buffer) {
     else if (buffer[3] != ' ' || buffer[4 + status_size] != ' '
              || buffer[8 + status_size] != '\n'
              || strlen(buffer) - (3 + status_size) != 6) {
-        printf("BUFFER ;%s;\n", buffer);
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "OK") && (strlen(aid) != 3 || !is_numeric(aid))) {
-        fprintf(stderr, "ERROR: server sent message in wrong format\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "OK") && buffer[10] == '\n')
         printf("Auction %s was started.\n", aid);
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void connsend_tcp_socket(char *message, int fd, struct addrinfo *res, char *ASIP, char *ASport) {
@@ -508,15 +521,17 @@ void handle_close_auction_response(char *status, char *aid, char *uid, char *buf
 
     else if (buffer[3] != ' ' || buffer[4 + status_size] != '\n'
              || strlen(buffer) - status_size != 5) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "OK") && buffer[6] == '\n')
         printf("Auction %s was closed.\n", aid);
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void close_auction(char *uid, char *password, char *aid, char *ASIP, char *ASport) {
@@ -577,13 +592,13 @@ void print_aid_state(char *auction_list) {
     for (int i = 0; auction_list[6*i] == ' '; i++) {
         sscanf(&auction_list[6*i + 1], "%3s %s", aid, state);
         if (auction_list[6*i + 4] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-            return;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         if (strlen(aid) != 3 || !is_numeric(aid)) {
-            fprintf(stderr, "ERROR: server sent unvalid AID %s.\n", aid);
-            return;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         if (!strcmp(state, "1"))
@@ -591,8 +606,8 @@ void print_aid_state(char *auction_list) {
         else if (!strcmp(state, "0"))
             printf("\"%s\" - closed; ", aid);
         else {
-            fprintf(stderr, "ERROR: server sent unvalid state %s.\n", state);
-            return;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
     }
 }
@@ -607,8 +622,8 @@ void handle_myauctions_response(char *status, char *buffer, char *auction_list) 
              || strlen(buffer) - (status_size + auction_list_size) != 5
              || buffer[4 + status_size + auction_list_size] != '\n'
              || buffer[5 + status_size + auction_list_size] != '\0') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "NOK") && buffer[7] == '\n')
@@ -626,8 +641,10 @@ void handle_myauctions_response(char *status, char *buffer, char *auction_list) 
         printf("\n");
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void myauctions(char *uid, char *ASIP, char *ASport) {
@@ -653,8 +670,8 @@ void myauctions(char *uid, char *ASIP, char *ASport) {
     sscanf(buffer, "RMA %3s%[^\n]", status, auction_list);
 
     if (strlen(auction_list) > 6000) {
-        fprintf(stderr, "ERROR: server sent auction list with wrong format.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     handle_myauctions_response(status, buffer, auction_list);
@@ -679,8 +696,8 @@ void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
              || strlen(buffer) - (status_size + auction_list_size) != 5
              || buffer[4 + status_size + auction_list_size] != '\n'
              || buffer[5 + status_size + auction_list_size] != '\0') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
@@ -689,8 +706,10 @@ void handle_mybids_reponse(char *status, char *buffer, char *auction_list) {
         printf("\n");
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void mybids(char *uid, char *ASIP, char *ASport) {
@@ -716,8 +735,8 @@ void mybids(char *uid, char *ASIP, char *ASport) {
     sscanf(buffer, "RMB %3s%[^\n]", status, auction_list);
 
     if (strlen(auction_list) > 6000) {
-        fprintf(stderr, "ERROR: server sent auction list with wrong format.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     handle_mybids_reponse(status, buffer, auction_list);
@@ -739,8 +758,8 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
              || strlen(buffer) - (status_size + auction_list_size) != 5
              || buffer[4 + status_size + auction_list_size] != '\n'
              || buffer[5 + status_size + auction_list_size] != '\0') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "OK") && buffer[6 + strlen(auction_list)] == '\n') {
@@ -754,8 +773,10 @@ void handle_list_response(char *status, char *buffer, char *auction_list) {
         printf("\n");
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void list(char *ASIP, char *ASport) {
@@ -775,8 +796,8 @@ void list(char *ASIP, char *ASport) {
     sscanf(buffer, "RLS %3s%[^\n]", status, auction_list);
 
     if (strlen(auction_list) > 6000) {
-        fprintf(stderr, "ERROR: server sent auction list with wrong format.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     handle_list_response(status, buffer, auction_list);
@@ -808,8 +829,10 @@ void handle_show_asset_response(char *status, char *fname, char *fsize, int fd, 
     else if (!strcmp(status, "ERR"))
         printf("The syntax of the request message is incorrect or the parameters values are invalid.\n");
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void show_asset(char *aid, char *ASIP, char *ASport) {
@@ -885,14 +908,13 @@ void show_asset(char *aid, char *ASIP, char *ASport) {
     if (prefix[3] != ' ' || prefix[4 + status_size] != ' '
         || prefix[5 + status_size + fname_size] != ' '
         || prefix[6 + status_size + fname_size + fsize_size] != ' ') {
-        printf("PREFIX ;%s;", prefix);
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     if (!is_filename(fname) || strlen(fsize) > 7 || !is_numeric(fsize)) {
-        fprintf(stderr, "ERROR: server sent message in the wrong format\n");
-        exit_error(fd, res);
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     handle_show_asset_response(status, fname, fsize, fd, res);
@@ -922,15 +944,17 @@ void handle_bid_response(char *status, char *aid , char *response) {
 
     else if (response[3] != ' ' || response[4 + status_size] != '\n'
              || strlen(response) - status_size != 5) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "ACC"))
         printf("Your bid was accepted.\n");
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *ASport) {
@@ -984,26 +1008,26 @@ void bid(char *uid, char *password, char *aid, char *value, char *ASIP, char *AS
 int verify_terminator(int bid, int closed, char *buffer, long auction_info_size, long bid_info_size, long closed_info_size) {
     if (bid == 1 && closed == 1 && (buffer[auction_info_size + bid_info_size + closed_info_size] != '\n'
         || buffer[auction_info_size + bid_info_size + closed_info_size + 1] != '\0')) {
-        fprintf(stderr, "ERROR: server sent message with bids and closure info but with no terminator\n");
-        return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (bid == 0 && closed == 1 && (buffer[auction_info_size + 1 + closed_info_size] != '\n'
              || buffer[auction_info_size + 2 + closed_info_size] != '\n')) {
-        fprintf(stderr, "ERROR: server sent message with closure info but with no terminator\n");
-        return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (bid == 1 && closed == 0 && (buffer[auction_info_size + bid_info_size - 1] != '\n'
              || buffer[auction_info_size + bid_info_size] != '\0')) {
-        fprintf(stderr, "ERROR: server sent message with bids info but with no terminator\n");
-        return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (bid == 0 && closed == 0 && (buffer[auction_info_size] != '\n'
              || buffer[auction_info_size + 1] != '\0')) {
-        fprintf(stderr, "ERROR: server sent message with no additional info and with no terminator\n");
-        return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
     return 1;
 }
@@ -1014,8 +1038,8 @@ int handle_bids(char *bid_info) {
     int bid_info_length;
 
     if (bid_info[0] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     for (int i = 0; bid_info[i] == ' ' && strlen(&bid_info[i]) != 1; i += bid_info_length) {
@@ -1025,16 +1049,16 @@ int handle_bids(char *bid_info) {
 
         if (bid_info[i + 2] != ' ' || bid_info[i + 9] != ' ' || bid_info[i + 10 + bid_value_size] != ' '
             || bid_info[i + 21 + bid_value_size] != ' ' || bid_info[i + 30 + bid_value_size] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-            return 0;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         if (strlen(bidder_uid) != 6 || !is_numeric(bidder_uid)
             || bid_value_size > 6 || !is_numeric(bid_value)
             || !is_date(bid_date) || !is_time(bid_time)
             || strlen(bid_sec_time) > 5 || !is_numeric(bid_sec_time)) {
-            fprintf(stderr, "ERROR: server sent message in wrong bids format\n");
-            return 0;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         // 7 is for the 'B' and the spaces
@@ -1049,14 +1073,14 @@ int handle_closed(char *closed_info) {
     sscanf(closed_info, "E %10s %8s %s\n", end_date, end_time, end_sec_time);
 
     if (closed_info[1] != ' ' || closed_info[12] != ' ' || closed_info[21] != ' ' ) {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     if (!is_date(end_date) || !is_time(end_time)
         || strlen(end_sec_time) > 5 || !is_numeric(end_sec_time)) {
-            fprintf(stderr, "ERROR: server sent message in wrong closure format\n");
-            return 0;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     printf("closed: %s %s, %s\n", end_date, end_time, end_sec_time);
@@ -1111,8 +1135,8 @@ void show_record(char *aid, char *ASIP, char *ASport) {
         printf("Auction with AID %s does not exist.\n", aid);
 
     else if (buffer[3] != ' ') {
-        fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-        return;
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
     }
 
     else if (!strcmp(status, "OK")) {
@@ -1124,14 +1148,14 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             || start_value_size > 6 || !is_numeric(start_value)
             || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5
             || !is_numeric(timeactive) || strlen(closed_info) > 27) {
-            fprintf(stderr, "ERROR: server sent message in wrong format\n");
-            return;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         if (strlen(buffer) - (26 + auction_name_size + asset_fname_size
-            + start_value_size + timeactive_size + (strlen(bid_info) - 1) + strlen(closed_info)) != 12) {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-            return;
+            + start_value_size + timeactive_size + (strlen(bid_info) - 1) + strlen(closed_info)) != 12){
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         int bid = strlen(bid_info) - 1 != 0, closed = strlen(closed_info) != 0;
@@ -1146,8 +1170,8 @@ void show_record(char *aid, char *ASIP, char *ASport) {
             || buffer[16 + auction_name_size + asset_fname_size + start_value_size] != ' '
             || buffer[27 + auction_name_size + asset_fname_size + start_value_size] != ' '
             || buffer[36 + auction_name_size + asset_fname_size + start_value_size] != ' ') {
-            fprintf(stderr, "ERROR: Server message includes whitespaces other than ' ' or has extra bytes after the terminator.\n");
-            return;
+            fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+            exit(1);
         }
 
         printf("owner: %s, %s, %s, value=%s, %s %s, timeactive: %s\n", host_uid,
@@ -1163,8 +1187,10 @@ void show_record(char *aid, char *ASIP, char *ASport) {
                 return;
     }
 
-    else
-        fprintf(stderr, "ERROR: server sent unknown message.\n");
+    else {
+        fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
+        exit(1);
+    }
 }
 
 int main(int argc, char **argv) {

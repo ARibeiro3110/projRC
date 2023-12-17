@@ -318,6 +318,7 @@ void handle_login_request(char *uid, char *user_password, int fd, struct sockadd
             int ret = fread(file_password, 1, 8, fp);
             if (ret < 8) {
                 fprintf(stderr, "ERROR: pass file read failed\n");
+                fclose(fp);
                 exit_server(1);
             }
 
@@ -392,6 +393,7 @@ void handle_logout_request(char *uid, char *user_password, int fd, struct sockad
             int ret = fread(file_password, 1, 8, fp);
             if (ret < 8) {
                 fprintf(stderr, "ERROR: pass file read failed\n");
+                fclose(fp);
                 exit_server(1);
             }
 
@@ -518,8 +520,10 @@ int auction_duration_has_expired(char *aid, char *start_file_path) {
     int timeactive;
     sscanf(buffer, "%*s %*s %*s %*d %*s %*s %d", &timeactive);
 
-    if (timeactive < 0 || timeactive > 99999)   
+    if (timeactive < 0 || timeactive > 99999) {
+        fclose(fp_start);
         exit_server(1);
+    }
 
     fgets(buffer, 20, fp_start);  // read start_fulltime (long max 19 digits)
     buffer[strlen(buffer)] = '\0';
@@ -624,7 +628,7 @@ void handle_myauctions_request(char *uid, int fd, struct sockaddr_in addr, int v
 
     else if (n_entries <= 0 && errno != 2) {
         fprintf(stderr, "ERROR: unable to open directory.\n");
-        exit(1);
+        exit_server(1);
     }
 
     else {
@@ -674,7 +678,7 @@ void handle_mybids_request(char *uid, int fd, struct sockaddr_in addr, int verbo
 
     else if (n_entries <= 0 && errno != 2) {
         fprintf(stderr, "ERROR: unable to open directory.\n");
-        exit(1);
+        exit_server(1);
     }
 
     else {
@@ -703,7 +707,7 @@ void append_auctions_list(char *response, struct dirent **filelist, int n_entrie
 
                 if (strlen(aid) != 3 || !is_numeric(aid)) {
                     fprintf(stderr, "ERROR: aid has wrong format.\n");
-                    exit(1);
+                    exit_server(1);
                 }
 
                 char start_file_path[33];
@@ -712,7 +716,7 @@ void append_auctions_list(char *response, struct dirent **filelist, int n_entrie
 
                 if (exists_file(start_file_path) != 1) {
                     fprintf(stderr, "ERROR: start file for auction %s does not exist.\n", aid);
-                    exit(1);
+                    exit_server(1);
                 }
 
                 char end_file_path[31];
@@ -758,7 +762,7 @@ void handle_list_request(int fd, struct sockaddr_in addr, int verbose) {
 
     else if (n_entries <= 0 && errno != 2) {
         fprintf(stderr, "ERROR: unable to open directory.\n\n");
-        exit(1);
+        exit_server(1);
     }
 
     else {
@@ -786,7 +790,7 @@ int get_bid_list(char *bid_info, char *aid) {
 
     else if (n_entries <= 0 && errno != 2) {
         fprintf(stderr, "ERROR: unable to open directory.\n");
-        exit(1);
+        exit_server(1);
     }
 
     char bid_value[VALUE_SIZE] = "";
@@ -797,13 +801,13 @@ int get_bid_list(char *bid_info, char *aid) {
         if (len == 10) {
             sscanf(filelist[n_entries]->d_name, "%s.txt", bid_value);
             if (strlen(bid_value) > 6 || !is_numeric(bid_value))
-                exit(1);
+                exit_server(1);
 
             sprintf(pathname, "ASDIR/AUCTIONS/%s/BIDS/%s", aid, bid_value);
             FILE *fp = fopen(pathname, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: unable to open bid file.\n");
-                exit(1);
+                exit_server(1);
             }
 
             fgets(buffer, 40, fp);
@@ -818,7 +822,7 @@ int get_bid_list(char *bid_info, char *aid) {
                 || !is_date(bid_date) || !is_time(bid_time)
                 || strlen(bid_sec_time) > 5 || !is_numeric(bid_sec_time)) {
                 fprintf(stderr, "ERROR: bid file has message in wrong bids format\n");
-                exit(1);
+                exit_server(1);
             }
 
             strcat(bid_info, " B ");
@@ -850,7 +854,7 @@ int get_closed_info(char *closed_info, char *aid) {
         FILE *fp = fopen(end_file_path, "r");
         if (fp == NULL) {
             fprintf(stderr, "ERROR: unable to open bid file.\n");
-            exit(1);
+            exit_server(1);
         }
 
         fgets(buffer, 26, fp);
@@ -862,7 +866,7 @@ int get_closed_info(char *closed_info, char *aid) {
         if (!is_date(end_date) || !is_time(end_time)
             || strlen(end_sec_time) > 5 || !is_numeric(end_sec_time)) {
             fprintf(stderr, "ERROR: server sent message in wrong closure format\n");
-            exit(1);
+            exit_server(1);
         }
 
         strcat(closed_info, " E ");
@@ -900,7 +904,7 @@ void handle_show_record_request(char *aid, int fd, struct sockaddr_in addr, int 
         FILE *fp = fopen(path, "r");
         if (fp == NULL) {
             fprintf(stderr, "ERROR: unable to open start file.\n\n");
-            exit(1);
+            exit_server(1);
         }
 
         fgets(buffer, 76, fp);
@@ -955,7 +959,7 @@ void handle_udp_request(int fd_udp, struct sockaddr_in addr_udp, int verbose) {
 
     socklen_t addrlen = sizeof(addr_udp);
     int n = recvfrom(fd_udp, buffer, LIN_LOU_UNR_MESSAGE_SIZE, 0, (struct sockaddr*) &addr_udp, &addrlen);
-    if (n == -1) /*error*/ exit(1);
+    if (n == -1) /*error*/ exit_server(1);
 
     if (verbose)
         printf("REQUEST BY: %s - PORT No: %d\n", inet_ntoa(addr_udp.sin_addr), ntohs(addr_udp.sin_port));
@@ -1050,7 +1054,7 @@ void send_tcp_response(char *response, int fd) {
     int n, sum = 0;
     while (sum != strlen(response)) {
         n = write(fd, response, strlen(response));
-        if (n == -1) exit(1);
+        if (n == -1) exit_server(1);
         sum += n;
     }
 }
@@ -1062,7 +1066,7 @@ void send_tcp_response_ERR(char *prefix, int fd, int verbose) {
     int n, sum = 0;
     while (sum != strlen(response)) {
         n = write(fd, response, strlen(response));
-        if (n == -1) exit(1);
+        if (n == -1) exit_server(1);
         sum += n;
     }
 }
@@ -1071,7 +1075,7 @@ void send_tcp_ERR(int fd, int verbose) {
     int n, sum = 0;
     while (sum != 4) {
         n = write(fd, "ERR\n", 4);
-        if (n == -1) exit(1);
+        if (n == -1) exit_server(1);
         sum += n;
     }
 
@@ -1086,7 +1090,7 @@ void create_start(int aid, char *uid, char *name, char *asset_fname, char *start
     FILE *fp = fopen(start_file_path, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create login file.\n");
-        exit(1);
+        exit_server(1);
     }
 
     time_t fulltime;
@@ -1107,7 +1111,7 @@ void create_start(int aid, char *uid, char *name, char *asset_fname, char *start
     int size = strlen(buffer), n = fwrite(buffer, 1, size, fp);
     if (n < size) { /*error*/
         fprintf(stderr, "ERROR: copied data write to file failed\n");
-        exit(1);
+        exit_server(1);
     }
 
     fclose(fp);
@@ -1124,7 +1128,7 @@ int store_asset(int fd, int aid, char *asset_fname, long f_size) {
         if (mkdir(auction_dir, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create auction directory.\n");
             fprintf(stderr, "ERRO1: %d\n", aid);
-            exit(1);
+            exit_server(1);
         }
 
     char asset_dir[25];
@@ -1134,7 +1138,7 @@ int store_asset(int fd, int aid, char *asset_fname, long f_size) {
         if (mkdir(asset_dir, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create auction directory.\n");
             fprintf(stderr, "ERRO2: %d\n", aid);
-            exit(1);
+            exit_server(1);
         }
 
     char asset_path[50];
@@ -1143,7 +1147,7 @@ int store_asset(int fd, int aid, char *asset_fname, long f_size) {
     fp = fopen(asset_path, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create asset file.\n");
-        exit(1);
+        exit_server(1);
     }
 
     int ret = copy_from_socket_to_file(f_size, fd, NULL, fp);
@@ -1165,7 +1169,7 @@ void create_hosted(char *uid, int aid) {
     FILE *fp = fopen(hosted_auction_path, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create hosted file.\n");
-        exit(1);
+        exit_server(1);
     }
     fclose(fp);
 }
@@ -1206,13 +1210,13 @@ void handle_open_auction_request(int newfd, char *uid, char *user_password, char
         FILE *fp = fopen(pass_file_path, "r");
         if (fp == NULL) {
             fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
-            exit(1);
+            exit_server(1);
         }
 
         int ret = fread(file_password, 1, 8, fp);
         if (ret < 8) {
             fprintf(stderr, "ERROR: pass file read failed\n");
-            return;
+            exit_server(1);
         }
 
         file_password[8] = '\0';
@@ -1263,7 +1267,7 @@ void handle_open_auction_request(int newfd, char *uid, char *user_password, char
 
     else if (n_entries <= 0 && errno != 2) {
         fprintf(stderr, "ERROR: unable to open directory.\n");
-        exit(1);
+        exit_server(1);
     }
 
     else {
@@ -1271,7 +1275,7 @@ void handle_open_auction_request(int newfd, char *uid, char *user_password, char
         sscanf(filelist[n_entries - 1]->d_name, "%d", &aid);
 
         if (aid < 1 || aid > 999)
-            exit(1);
+            exit_server(1);
 
         if (aid == 999) {
             sprintf(response, "ROA NOK\n");
@@ -1326,7 +1330,7 @@ int create_close(char *end_file_path, char *start_file_path) {
     sscanf(buffer, "%*s %*s %*s %*d %*s %*s %d", &timeactive);
 
     if (timeactive < 0 || timeactive > 99999)   
-        exit(1);
+        exit_server(1);
 
     fgets(buffer, 20, fp_start);  // read start_fulltime (int max 19 digits)
     buffer[strlen(buffer)] = '\0';
@@ -1376,13 +1380,13 @@ void handle_close_auction_request(int newfd, char *uid, char *user_password, cha
         FILE *fp = fopen(pass_file_path, "r");
         if (fp == NULL) {
             fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
-            exit(1);
+            exit_server(1);
         }
 
         int ret = fread(file_password, 1, 8, fp);
         if (ret < 8) {
             fprintf(stderr, "ERROR: pass file read failed\n");
-            return;
+            exit_server(1);
         }
 
         file_password[8] = '\0';
@@ -1504,7 +1508,7 @@ void handle_show_asset_request(int newfd, char *aid, int verbose) {
         FILE *fp = fopen(start_file_path, "r");
         if (fp == NULL) {
             fprintf(stderr, "ERROR: %d unable to open start file.\n", errno);
-            exit(1);
+            exit_server(1);
         }
         char buffer[96];
         fgets(buffer, 96, fp);
@@ -1513,7 +1517,7 @@ void handle_show_asset_request(int newfd, char *aid, int verbose) {
         sscanf(buffer, "%*s %*s %s", asset_fname);
 
         if (!is_filename(asset_fname))
-            exit(1);
+            exit_server(1);
 
         char asset_path[50];
         sprintf(asset_path, "ASDIR/AUCTIONS/%s/ASSET/%s", aid, asset_fname);
@@ -1534,7 +1538,7 @@ void handle_show_asset_request(int newfd, char *aid, int verbose) {
             FILE *fp = fopen(asset_path, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: %d unable to open asset file.\n", errno);
-                exit(1);
+                exit_server(1);
             }
             send_asset(fp, newfd);
             fclose(fp);
@@ -1559,7 +1563,7 @@ void create_bid(int highest_bid, char *aid, char *uid) {
     FILE *fp = fopen(bid_file_path, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create login file.\n");
-        exit(1);
+        exit_server(1);
     }
 
     sprintf(start_file_path, "ASDIR/AUCTIONS/%s/START_%s.txt", aid, aid);
@@ -1594,7 +1598,7 @@ void create_bid(int highest_bid, char *aid, char *uid) {
     int size = strlen(buffer), n = fwrite(buffer, 1, size, fp);
     if (n < size) { /*error*/
         fprintf(stderr, "ERROR: copied data write to file failed\n");
-        exit(1);
+        exit_server(1);
     }
 
     fclose(fp);
@@ -1607,7 +1611,7 @@ void create_bidded(char *uid, char *aid) {
     FILE *fp = fopen(bidded_auction_path, "w");
     if (fp == NULL) {
         fprintf(stderr, "ERROR: unable to create bidded file.\n");
-        exit(1);
+        exit_server(1);
     }
     fclose(fp);
 }
@@ -1622,19 +1626,19 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
     if (!exists_dir(dirname)) {
         if (mkdir(dirname, 0700) == -1) {
             fprintf(stderr, "ERROR: unable to create ASDIR.\n");
-            exit(1);
+            exit_server(1);
         }
 
         if (!exists_file(start_file_path)) {
             fprintf(stderr, "ERROR: unable to open start file.\n");
-            exit(1);
+            exit_server(1);
         }
 
         else {
             FILE *fp_start = fopen(start_file_path, "r");
             if (fp_start == NULL) {
                 fprintf(stderr, "ERROR: unable to open start file.\n");
-                return ;
+                exit_server(1);
             }
 
             char buffer[96];
@@ -1646,7 +1650,7 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             fclose(fp_start);
 
             if (min_bid < 0 || min_bid > 999999)
-                exit(1);
+                exit_server(1);
 
             if (attemped_bid > min_bid) {
                 create_bid(attemped_bid, aid, uid);
@@ -1672,14 +1676,14 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
         int n_entries = scandir(dirname, &filelist, 0, alphasort);
         if (n_entries <= 0 && errno != 2) {
             fprintf(stderr, "ERROR: unable to open directory.\n");
-            exit(1);
+            exit_server(1);
         }
 
         else if (n_entries == 2) {
             FILE *fp_start = fopen(start_file_path, "r");
             if (fp_start == NULL) {
                 fprintf(stderr, "ERROR: unable to open start file.\n");
-                return ;
+                exit_server(1);
             }
 
             char buffer[96];
@@ -1691,7 +1695,7 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             fclose(fp_start);
 
             if (min_bid < 0 || min_bid > 999999)
-                exit(1);
+                exit_server(1);
 
             if (attemped_bid > min_bid) {
                 create_bid(attemped_bid, aid, uid);
@@ -1715,7 +1719,7 @@ void attempt_bid(char *aid, char *uid, char *value, char *response, int verbose)
             sscanf(filelist[n_entries - 1]->d_name, "%d.txt", &highest_bid);
 
             if (highest_bid < 0 || highest_bid > 999999)
-                exit(1);
+                exit_server(1);
 
             if (attemped_bid > highest_bid) {
                 create_bid(attemped_bid, aid, uid);
@@ -1768,14 +1772,14 @@ void handle_bid_request(int newfd, char *uid, char *user_password, char *aid, ch
             FILE *fp = fopen(pass_file_path, "r");
             if (fp == NULL) {
                 fprintf(stderr, "ERROR: %d unable to open pass file.\n", errno);
-                exit(1);
+                exit_server(1);
             }
 
             int ret = fread(file_password, 1, 8, fp);
             if (ret < 8) {
                 fprintf(stderr, "ERROR: pass file read failed\n");
                 sem_post_(sem[atoi(aid)]);
-                return; // TODO
+                exit_server(1);
             }
 
             file_password[8] = '\0';
@@ -1855,7 +1859,7 @@ void handle_tcp_request(int newfd, struct sockaddr_in addr_tcp, int verbose) {
             n = read(newfd, &buffer[i], 1);
             if (n == -1) {
                 fprintf(stderr, "ERROR: open message read failed\n");
-                return;
+                exit_server(1);
             }
 
             if (buffer[i] == ' ')
