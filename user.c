@@ -1144,7 +1144,7 @@ void show_record(char *aid, char *ASIP, char *ASport) {
              start_value_size = strlen(start_value), timeactive_size = strlen(timeactive);
 
         if (strlen(host_uid) != 6 || !is_numeric(host_uid) || auction_name_size > 10
-            || !is_alphanumeric(auction_name) || !is_filename(asset_fname)
+            || !is_auction_name(auction_name) || !is_filename(asset_fname)
             || start_value_size > 6 || !is_numeric(start_value)
             || !is_date(start_date) || !is_time(start_time) || strlen(timeactive) > 5
             || !is_numeric(timeactive) || strlen(closed_info) > 27) {
@@ -1160,8 +1160,6 @@ void show_record(char *aid, char *ASIP, char *ASport) {
 
         if (strlen(buffer) - (26 + auction_name_size + asset_fname_size
             + start_value_size + timeactive_size + strlen(bid_info) + tmp) != 11){
-            printf("%d", strlen(buffer) - (26 + auction_name_size + asset_fname_size
-            + start_value_size + timeactive_size + strlen(bid_info) + tmp));
             fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
             exit(1);
         }
