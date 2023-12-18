@@ -459,7 +459,8 @@ void open_auction(char *uid, char *password, char *name, char *asset_fname,
     int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
     if (errcode != 0) {  /*error*/
         fprintf(stderr, "ERROR: server not found\n");
-        exit_error(fd, res);
+        close(fd);
+        exit(1);
     }
 
     char message[OPA_MESSAGE_SIZE] = "", buffer[BUFFER_DEFAULT] = "";
@@ -1013,7 +1014,7 @@ int verify_terminator(int bid, int closed, char *buffer, long auction_info_size,
     }
 
     else if (bid == 0 && closed == 1 && (buffer[auction_info_size + 1 + closed_info_size] != '\n'
-             || buffer[auction_info_size + 2 + closed_info_size] != '\n')) {
+             || buffer[auction_info_size + 2 + closed_info_size] != '\0')) {
         fprintf(stderr, "ERROR: server sent wrong protocol message.\n");
         exit(1);
     }
@@ -1200,47 +1201,6 @@ void show_record(char *aid, char *ASIP, char *ASport) {
 }
 
 int main(int argc, char **argv) {
-    // char buffer[100]; // TODO apagar
-    // memset(buffer, 0, 100);
-    // sendrec_udp_socket("LIN 12345 12345678\n", buffer, RLI_RLO_RUR_MESSAGE_SIZE, "193.136.138.142", "58011");
-    // printf("%s\n", buffer);
-
-    // char *ASIP = "193.136.138.142";
-    // char *ASport = "58011";
-
-    // int fd = socket(AF_INET, SOCK_STREAM, 0); //TCP socket
-    // if (fd == -1) exit(1); //error
-
-    // struct addrinfo *res, hints;
-
-    // struct timeval timeout;
-    // timeout.tv_sec = 5;  // 5 seconds timeout
-    // timeout.tv_usec = 0;
-
-    // if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
-    //     fprintf(stderr, "ERROR: socket timeout creation was not sucessful\n");
-    //     exit_error(fd, res);
-    // }
-
-    // memset(&hints, 0, sizeof hints);
-    // hints.ai_family = AF_INET; //IPv4
-    // hints.ai_socktype = SOCK_STREAM; //TCP socket
-
-    // int errcode = getaddrinfo(ASIP, ASport, &hints, &res);
-    // if (errcode != 0) {  /*error*/
-    //     fprintf(stderr, "ERROR: server not found\n");
-    //     exit_error(fd, res);
-    // }
-
-    // connsend_tcp_socket("OPA 102763 afonsoRC teste 10 30 ficheiro.jpg 2 ass", fd, res, ASIP, ASport);
-
-    // char response[RBD_MESSAGE_SIZE] = "", status[STATUS_SIZE] = "";
-    // int n, bytes_read = 0;
-    // read_tcp_socket(fd, NULL, response, 9);
-    // printf("%s\n", response);
-
-    // return 0;
-
     char ASIP[ASIP_SIZE] = "", ASport[ASPORT_SIZE] = "";
     handle_main_arguments(argc, argv, ASIP, ASport);
 
